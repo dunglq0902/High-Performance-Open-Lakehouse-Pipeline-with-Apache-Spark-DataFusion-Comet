@@ -8,7 +8,7 @@
 
 ---
 
-## 📌 Giới thiệu Tổng quan
+## Giới thiệu Tổng quan
 
 Dự án này là một nghiên cứu thực nghiệm chuyên sâu kéo dài 8 tuần về việc ứng dụng **Apache DataFusion Comet** để gia tốc các khối lượng công việc (workloads) phân tích dữ liệu của **Apache Spark SQL** trên nền tảng **Open Lakehouse** (kết hợp **MinIO + Apache Parquet + Apache Iceberg**).
 
@@ -17,15 +17,15 @@ Mục tiêu cốt lõi của đề tài là đánh giá định lượng và gi�
 
 ---
 
-## 📑 Tài liệu Đặc tả Dự án Toàn diện
+## Tài liệu Đặc tả Dự án Toàn diện
 
 Toàn bộ kế hoạch nghiên cứu, cơ sở lý thuyết học thuật, thiết kế pipeline Medallion, ma trận thực nghiệm 3 tầng và lộ trình 8 tuần đã được đặc tả chi tiết tại:
 
-👉 **[Xem Bản Đặc tả Đề tài Chi tiết (Project Specification)](docs/project_specification.md)**
+**[Xem Bản Đặc tả Đề tài Chi tiết (Project Specification)](docs/project_specification.md)**
 
 ---
 
-## 🏛️ Kiến trúc Hệ thống (System Architecture)
+## Kiến trúc Hệ thống (System Architecture)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -62,7 +62,7 @@ Toàn bộ kế hoạch nghiên cứu, cơ sở lý thuyết học thuật, thi�
 
 ---
 
-## 🎯 3 Câu hỏi Nghiên cứu (Research Questions)
+## 3 Câu hỏi Nghiên cứu (Research Questions)
 
 * **RQ1 (Speedup & Throughput)**: DataFusion Comet cải thiện hiệu năng (thời gian thực thi, latency p50/p95) của Spark SQL bao nhiêu % trên các lớp workload khác nhau?
 * **RQ2 (Operator Suitability & Coverage)**: Những operator và biểu thức nào đạt hiệu quả gia tốc native cao nhất, và những thành phần nào thường xuyên bị fallback về Spark JVM?
@@ -70,7 +70,7 @@ Toàn bộ kế hoạch nghiên cứu, cơ sở lý thuyết học thuật, thi�
 
 ---
 
-## 🔬 Bộ Workload Benchmark (3 Tầng)
+## Bộ Workload Benchmark (3 Tầng)
 
 1. **Level 1 — Micro-benchmarks (M01 – M10)**: Cô lập từng toán tử (`Scan`, `Filter`, `Project`, `Hash Join`, `Aggregation`, `Sort`, `Window`, `Shuffle`).
 2. **Level 2 — Business Workload (B01 – B10)**: 10 câu truy vấn phân tích nghiệp vụ E-commerce thực tế (Revenue, LTV, RFM, Cohort, Rolling Avg...).
@@ -78,7 +78,7 @@ Toàn bộ kế hoạch nghiên cứu, cơ sở lý thuyết học thuật, thi�
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 * **Distributed Compute**: Apache Spark 4.1.x (Java 17)
 * **Native Accelerator**: Apache DataFusion Comet 1.0.0 (Rust + Apache Arrow)
@@ -90,7 +90,7 @@ Toàn bộ kế hoạch nghiên cứu, cơ sở lý thuyết học thuật, thi�
 
 ---
 
-## 📂 Cấu trúc Thư mục
+## Cấu trúc Thư mục
 
 ```
 ├── README.md                           # Trang giới thiệu tổng quan dự án
@@ -108,7 +108,7 @@ Toàn bộ kế hoạch nghiên cứu, cơ sở lý thuyết học thuật, thi�
 
 ---
 
-## 🚀 Bắt đầu Nhanh (Quickstart Preview)
+## Bắt đầu Nhanh (Quickstart Preview)
 
 ```bash
 # 1. Khởi động hạ tầng MinIO & Spark container
@@ -123,5 +123,5 @@ bash scripts/run_all_benchmarks.sh
 
 ---
 
-## 📜 Giấy phép (License)
+## Giấy phép (License)
 Dự án được phân phối dưới giấy phép mã nguồn mở [Apache License 2.0](LICENSE).
