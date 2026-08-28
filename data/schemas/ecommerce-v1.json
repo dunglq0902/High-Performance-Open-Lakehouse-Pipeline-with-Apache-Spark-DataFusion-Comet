@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "tables": {
+    "customers": {
+      "primary_key": ["customer_id"],
+      "schema_sha256": "5c637fd5c4aba6ef2ff9d55b8486dfde0d94cf45a137a28928ba80b6b47b3066",
+      "fields": [
+        {"name": "customer_id", "type": "int64", "nullable": false},
+        {"name": "customer_name", "type": "utf8", "nullable": false},
+        {"name": "email", "type": "utf8", "nullable": false},
+        {"name": "region", "type": "utf8", "nullable": false},
+        {"name": "segment", "type": "utf8", "nullable": false},
+        {"name": "signup_time", "type": "timestamp[us,UTC]", "nullable": false}
+      ]
+    },
+    "products": {
+      "primary_key": ["product_id"],
+      "schema_sha256": "5a860f7cd2aa1eacd558725ced28b6ae087b6756eb63569e1867b484670b54c0",
+      "fields": [
+        {"name": "product_id", "type": "int64", "nullable": false},
+        {"name": "product_name", "type": "utf8", "nullable": false},
+        {"name": "category", "type": "utf8", "nullable": false},
+        {"name": "base_price", "type": "decimal128(18,2)", "nullable": false},
+        {"name": "created_at", "type": "timestamp[us,UTC]", "nullable": false}
+      ]
+    },
+    "orders": {
+      "primary_key": ["order_id"],
+      "schema_sha256": "f785c66e88c806f0d57e79b24976c0c958a00f8e23dbe35c2422ef7b4979508d",
+      "fields": [
+        {"name": "order_id", "type": "int64", "nullable": false},
+        {"name": "customer_id", "type": "int64", "nullable": false},
+        {"name": "order_time", "type": "timestamp[us,UTC]", "nullable": false},
+        {"name": "status", "type": "utf8", "nullable": false},
+        {"name": "payment_method", "type": "utf8", "nullable": false}
+      ]
+    },
+    "order_items": {
+      "primary_key": ["order_id", "line_number"],
+      "schema_sha256": "56faf4e400bf8a1740a823846d55336a5e6aacc53dc73bc55c93d5cc99c20dfa",
+      "fields": [
+        {"name": "order_id", "type": "int64", "nullable": false},
+        {"name": "line_number", "type": "int32", "nullable": false},
+        {"name": "product_id", "type": "int64", "nullable": false},
+        {"name": "quantity", "type": "int32", "nullable": false},
+        {"name": "unit_price", "type": "decimal128(18,2)", "nullable": false},
+        {"name": "discount", "type": "decimal128(5,4)", "nullable": false}
+      ]
+    },
+    "events": {
+      "primary_key": ["event_id"],
+      "schema_sha256": "486dceb8f234b7361bc5c96a087dfe718e77564cad58645df4e570aa19433fc2",
+      "fields": [
+        {"name": "event_id", "type": "int64", "nullable": false},
+        {"name": "session_id", "type": "utf8", "nullable": false},
+        {"name": "customer_id", "type": "int64", "nullable": true},
+        {"name": "event_time", "type": "timestamp[us,UTC]", "nullable": false},
+        {"name": "event_type", "type": "utf8", "nullable": false},
+        {"name": "product_id", "type": "int64", "nullable": true},
+        {"name": "order_id", "type": "int64", "nullable": true},
+        {"name": "device_type", "type": "utf8", "nullable": false}
+      ]
+    }
+  }
+}

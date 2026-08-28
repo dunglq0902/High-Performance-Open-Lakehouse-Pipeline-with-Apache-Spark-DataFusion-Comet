@@ -1,0 +1,24 @@
+# Primary benchmark-eligible E-commerce profile. Generation is intentionally explicit because
+# this immutable dataset is substantially larger than the development fixtures.
+schema_version: 1
+profile_id: small
+seed: 20260827
+benchmark_eligible: true
+skew_profile: uniform
+timezone: UTC
+currency: USD
+rounding_mode: HALF_UP
+dataset_start: "2025-01-01T00:00:00Z"
+dataset_end: "2025-12-31T23:59:59Z"
+counts:
+  customers: 100000
+  products: 10000
+  orders: 1000000
+  order_items: 4000000
+  events: 5000000
+rows_per_file:
+  customers: 100000
+  products: 10000
+  orders: 500000
+  order_items: 500000
+  events: 500000

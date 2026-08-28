@@ -1,0 +1,22 @@
+schema_version: 1
+profile_id: fixture
+seed: 42
+benchmark_eligible: false
+skew_profile: uniform
+timezone: UTC
+currency: USD
+rounding_mode: HALF_UP
+dataset_start: "2025-01-01T00:00:00Z"
+dataset_end: "2025-12-31T23:59:59Z"
+counts:
+  customers: 24
+  products: 20
+  orders: 96
+  order_items: 240
+  events: 512
+rows_per_file:
+  customers: 24
+  products: 20
+  orders: 96
+  order_items: 120
+  events: 256

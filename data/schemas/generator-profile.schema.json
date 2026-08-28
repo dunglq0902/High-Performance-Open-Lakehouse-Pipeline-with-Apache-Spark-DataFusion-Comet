@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lakehouse-comet:generator-profile:v1",
+  "title": "Deterministic E-commerce generator profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "seed",
+    "benchmark_eligible",
+    "skew_profile",
+    "timezone",
+    "currency",
+    "rounding_mode",
+    "dataset_start",
+    "dataset_end",
+    "counts",
+    "rows_per_file"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "profile_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+    "seed": {"type": "integer", "minimum": 0},
+    "benchmark_eligible": {"type": "boolean"},
+    "skew_profile": {"const": "uniform"},
+    "timezone": {"const": "UTC"},
+    "currency": {"const": "USD"},
+    "rounding_mode": {"const": "HALF_UP"},
+    "dataset_start": {"type": "string", "format": "date-time"},
+    "dataset_end": {"type": "string", "format": "date-time"},
+    "counts": {"$ref": "#/$defs/tableCounts"},
+    "rows_per_file": {"$ref": "#/$defs/tableCounts"}
+  },
+  "$defs": {
+    "tableCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["customers", "products", "orders", "order_items", "events"],
+      "properties": {
+        "customers": {"type": "integer", "minimum": 1},
+        "products": {"type": "integer", "minimum": 1},
+        "orders": {"type": "integer", "minimum": 1},
+        "order_items": {"type": "integer", "minimum": 1},
+        "events": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}
