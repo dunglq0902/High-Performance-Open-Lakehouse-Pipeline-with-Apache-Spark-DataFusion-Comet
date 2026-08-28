@@ -1,6 +1,6 @@
 # Evaluating Apache DataFusion Comet for Accelerating Apache Spark Workloads in an Open Lakehouse Architecture
 
-[![Spark](https://img.shields.io/badge/Apache_Spark-4.1.x-E25A1C?logo=apachespark&logoColor=white)](https://spark.apache.org/)
+[![Spark](https://img.shields.io/badge/Apache_Spark-4.1.3-E25A1C?logo=apachespark&logoColor=white)](https://spark.apache.org/)
 [![DataFusion Comet](https://img.shields.io/badge/Apache_DataFusion-Comet_1.0.0-D82C20?logo=apache&logoColor=white)](https://datafusion.apache.org/comet/)
 [![Apache Iceberg](https://img.shields.io/badge/Apache_Iceberg-Lakehouse-blue?logo=apache&logoColor=white)](https://iceberg.apache.org/)
 [![MinIO](https://img.shields.io/badge/MinIO-S3_Compatible-C72C48?logo=minio&logoColor=white)](https://min.io/)
@@ -10,10 +10,18 @@
 
 ## Giới thiệu Tổng quan
 
-Dự án này là một nghiên cứu thực nghiệm chuyên sâu kéo dài 8 tuần về việc ứng dụng **Apache DataFusion Comet** để gia tốc các khối lượng công việc (workloads) phân tích dữ liệu của **Apache Spark SQL** trên nền tảng **Open Lakehouse** (kết hợp **MinIO + Apache Parquet + Apache Iceberg**).
+Dự án này là một nghiên cứu thực nghiệm có kiểm soát kéo dài 8 tuần, do một cá nhân thực hiện
+trên laptop, về việc ứng dụng **Apache DataFusion Comet** để gia tốc các khối lượng công việc
+(workloads) phân tích dữ liệu của **Apache Spark SQL** trên nền tảng **Open Lakehouse** (kết hợp
+**MinIO + Apache Parquet + Apache Iceberg**).
 
 Mục tiêu cốt lõi của đề tài là đánh giá định lượng và giải thích cơ chế:
 > **Cùng một data pipeline, khi kích hoạt DataFusion Comet (Rust Native Execution + Apache Arrow Columnar Format), hiệu năng thực thi (Speedup), mức tiêu thụ tài nguyên (CPU, RAM Peak, JVM GC, Shuffle I/O) thay đổi như thế nào trên từng loại toán tử (Scan, Join, Aggregation, Window, Shuffle) và các cấp độ quy mô dữ liệu?**
+
+> **Phạm vi đã chốt:** hệ thống chạy thủ công theo từng batch; SF1 là quy mô nghiên cứu chính,
+> SF10 là mở rộng tùy chọn sau capacity gate. Các scale lớn hơn SF10, scale-out và vận hành
+> real-time/liên tục nằm ngoài phạm vi. Danh mục workload đầy đủ là backlog; báo cáo chỉ dùng
+> tập con đã có SQL, manifest, correctness gate và artifact hợp lệ.
 
 ---
 
@@ -64,23 +72,23 @@ Toàn bộ kế hoạch nghiên cứu, cơ sở lý thuyết học thuật, thi�
 
 ## 3 Câu hỏi Nghiên cứu (Research Questions)
 
-* **RQ1 (Speedup & Throughput)**: DataFusion Comet cải thiện hiệu năng (thời gian thực thi, latency p50/p95) của Spark SQL bao nhiêu % trên các lớp workload khác nhau?
+* **RQ1 (Speedup & Throughput)**: DataFusion Comet thay đổi median latency và độ biến thiên của Spark SQL như thế nào trên các lớp workload khác nhau?
 * **RQ2 (Operator Suitability & Coverage)**: Những operator và biểu thức nào đạt hiệu quả gia tốc native cao nhất, và những thành phần nào thường xuyên bị fallback về Spark JVM?
-* **RQ3 (Scalability & Fallback Overhead)**: Mức độ gia tốc thay đổi ra sao khi quy mô dữ liệu tăng dần (1 GB, 10 GB, 50 GB, 100 GB), và chi phí chuyển đổi định dạng (Arrow-JVM conversion) khi xảy ra fallback ảnh hưởng như thế nào?
+* **RQ3 (Exploratory Scale & Fallback Overhead)**: Mức độ gia tốc thay đổi ra sao giữa SF1 và SF10, và chi phí chuyển đổi định dạng (Arrow-JVM conversion) khi xảy ra fallback ảnh hưởng như thế nào? So sánh hai điểm này không được diễn giải thành quy luật scalability tổng quát.
 
 ---
 
 ## Bộ Workload Benchmark (3 Tầng)
 
-1. **Level 1 — Micro-benchmarks (M01 – M10)**: Cô lập từng toán tử (`Scan`, `Filter`, `Project`, `Hash Join`, `Aggregation`, `Sort`, `Window`, `Shuffle`).
-2. **Level 2 — Business Workload (B01 – B10)**: 10 câu truy vấn phân tích nghiệp vụ E-commerce thực tế (Revenue, LTV, RFM, Cohort, Rolling Avg...).
-3. **Level 3 — Standard Benchmark (TPC-H)**: TPC-H SF1 (1 GB), SF10 (10 GB), SF50 (50 GB), SF100 (100 GB).
+1. **Level 1 — Micro-benchmarks**: Tập con đã duyệt từ danh mục M01–M10 để cô lập các toán tử trọng tâm.
+2. **Level 2 — Business Workload**: Tập con đã duyệt từ danh mục B01–B10 cho các truy vấn E-commerce đại diện.
+3. **Level 3 — TPC-H-derived**: SF1 là ma trận chính; SF10 là ma trận mở rộng tùy chọn, không phải kết quả TPC-H audited.
 
 ---
 
 ## Tech Stack
 
-* **Distributed Compute**: Apache Spark 4.1.x (Java 17)
+* **Single-node Compute**: Apache Spark 4.1.3 Standalone (Scala 2.13.17, Java 17.0.19)
 * **Native Accelerator**: Apache DataFusion Comet 1.0.0 (Rust + Apache Arrow)
 * **Table Format**: Apache Iceberg
 * **File Format**: Apache Parquet (Snappy/ZSTD)
@@ -108,18 +116,70 @@ Toàn bộ kế hoạch nghiên cứu, cơ sở lý thuyết học thuật, thi�
 
 ---
 
-## Bắt đầu Nhanh (Quickstart Preview)
+## Bắt đầu Nhanh
+
+Chạy các lệnh sau trong **Ubuntu/WSL**, từ thư mục repository (Docker Desktop phải đang chạy và
+đã bật WSL Integration cho Ubuntu):
 
 ```bash
-# 1. Khởi động hạ tầng MinIO & Spark container
-docker compose up -d
+# Khóa môi trường Python và sinh credentials cục bộ trong .env
+python -m pip install uv==0.8.15
+python scripts/bootstrap_env.py
+uv sync --all-extras --frozen
 
-# 2. Sinh dữ liệu thử nghiệm (TPC-H SF10 & E-Commerce)
-bash scripts/generate-data.sh
+# Gate không cần Docker: lint, unit tests, fixture và dry-run manifest smoke
+make lint test plan compose-config
 
-# 3. Kích hoạt toàn bộ bộ benchmark tự động
-bash scripts/run_all_benchmarks.sh
+# Smoke native Linux: build MinIO/Spark, ghi Iceberg, so Spark với Comet
+make smoke
+
+# Phân tích expected schema của 4 SQL TPC-H bằng Spark thật, không cần dataset
+make tpch-schema-check
+
+# Một lệnh tái lập profile readiness
+make run-all PROFILE=smoke-local
+
+# Dữ liệu nghiên cứu chính (chỉ chạy từ clean committed worktree)
+make research-data-ecommerce
+make research-data-tpch
+
+# Kiểm tra và lập kế hoạch cho 10 workload đã duyệt
+make validate-research
+make research-plan
+
+# Chạy tuần tự 6 E-commerce + 4 TPC-H-derived campaign và dựng báo cáo
+make benchmark
+make report
+
+# Tương đương benchmark + report
+make run-all PROFILE=benchmark-laptop
 ```
+
+`make smoke` cần Docker Linux (Docker Desktop + WSL2 cũng được). Trên `x86_64`, CPU phải hỗ
+trợ AVX2 cho native binary Comet 1.0.0. Smoke dùng fixture 96 orders, được gắn nhãn
+`non-research`; nó là bằng chứng readiness/correctness, không phải kết quả benchmark để công bố.
+Lệnh cũng kiểm tra golden plan đã khóa theo Spark 4.1.3/Comet 1.0.0/Iceberg 1.11.0 và dừng nếu
+runtime, input, dữ liệu, kết quả hoặc physical-plan semantics bị drift.
+
+`benchmark-laptop` dùng 2 CPU và giới hạn worker/client 5 GiB, lịch paired randomized AB/BA,
+warm-up tách khỏi measurement, timeout/resume bất biến, event-log attribution theo `jobGroupId`,
+resource sampling đúng cửa sổ terminal action và bootstrap CI 95%. Cả hai generator chính đều
+fail-closed nếu worktree chưa sạch/commit; TPC-H SF1 còn khóa source archive, checksum, schema,
+row count, PK/FK, date bounds và nhãn `non-audited`.
+
+## Trạng thái hiện tại
+
+Control plane và toàn bộ core workload đã được triển khai, nhưng **nghiên cứu chưa hoàn tất** vì
+chưa sinh hai dataset primary và chưa chạy 10 campaign SF1 để tạo `results/raw`/báo cáo. Gate cục
+bộ mới nhất có 186 test pass, Ruff/mypy pass và Compose config hợp lệ. Native smoke gần nhất ngày
+27/08/2026 đã pass toàn bộ correctness/snapshot/native-plan gate tại
+`.artifacts/smoke/smoke-20260827T072326Z-1701/verification.json`; đó vẫn chỉ là readiness evidence,
+không phải benchmark được công bố. Image sau phần tích hợp TPC-H ngày 28/08 chưa thể smoke lại do
+Docker Desktop 4.86 trên máy này crash bởi stale AF_UNIX runtime socket.
+
+Các phiên bản, Maven coordinates, OCI digests và source checksums nằm trong
+[`runtime-versions.lock`](runtime-versions.lock). Trạng thái phạm vi đã triển khai và các phần còn
+thiếu nằm trong [`docs/implementation-status.md`](docs/implementation-status.md).
 
 ---
 

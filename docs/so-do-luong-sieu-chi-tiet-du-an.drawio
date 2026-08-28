@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-08-24T00:00:00.000Z" agent="Codex" version="24.7.17" type="device" compressed="false">
+  <diagram id="project-detailed-flow" name="Luồng siêu chi tiết">
+    <mxGraphModel dx="2600" dy="2200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2600" pageHeight="2200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="&lt;b&gt;LUỒNG SIÊU CHI TIẾT — READINESS SMOKE M02, ICEBERG, SPARK BASELINE VÀ COMET&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:14px&quot;&gt;Đường liền: đã có trong code/config • Đường nét đứt: protocol nghiên cứu chưa triển khai đầy đủ&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontColor=#0f172a;" vertex="1" parent="1">
+          <mxGeometry x="220" y="15" width="2160" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-blue" value="Control / Spark" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dbeafe;strokeColor=#2563eb;fontColor=#0f172a;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1640" y="78" width="145" height="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-green" value="Storage / native" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#dcfce7;strokeColor=#16a34a;fontColor=#0f172a;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1795" y="78" width="145" height="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-orange" value="Validation / gate" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#fef3c7;strokeColor=#d97706;fontColor=#0f172a;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1950" y="78" width="145" height="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-purple" value="Metadata / artifact" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#ede9fe;strokeColor=#7c3aed;fontColor=#0f172a;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="2105" y="78" width="160" height="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="legend-dashed" value="Nét đứt = tương lai" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;dashed=1;fillColor=#f8fafc;strokeColor=#64748b;fontColor=#475569;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="2275" y="78" width="170" height="28" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="lane-orchestrator" value="A  HOST / PYTHON ORCHESTRATOR" style="swimlane;html=1;horizontal=0;startSize=34;rounded=1;arcSize=6;fillColor=#f8fafc;strokeColor=#94a3b8;fontColor=#334155;fontStyle=1;fontSize=13;swimlaneFillColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="25" y="120" width="470" height="1440" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane-spark" value="B  SPARK CLUSTER + PREPARE APP" style="swimlane;html=1;horizontal=0;startSize=34;rounded=1;arcSize=6;fillColor=#f8fafc;strokeColor=#94a3b8;fontColor=#334155;fontStyle=1;fontSize=13;swimlaneFillColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="510" y="120" width="490" height="1440" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane-storage" value="C  MINIO + ICEBERG CATALOG / TABLE" style="swimlane;html=1;horizontal=0;startSize=34;rounded=1;arcSize=6;fillColor=#f8fafc;strokeColor=#94a3b8;fontColor=#334155;fontStyle=1;fontSize=13;swimlaneFillColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="1015" y="120" width="500" height="1440" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane-baseline" value="D  ENGINE A — SPARK BASELINE" style="swimlane;html=1;horizontal=0;startSize=34;rounded=1;arcSize=6;fillColor=#f8fafc;strokeColor=#94a3b8;fontColor=#334155;fontStyle=1;fontSize=13;swimlaneFillColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="1530" y="120" width="410" height="1440" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane-comet" value="E  ENGINE B — SPARK + DATAFUSION COMET" style="swimlane;html=1;horizontal=0;startSize=34;rounded=1;arcSize=6;fillColor=#f8fafc;strokeColor=#94a3b8;fontColor=#334155;fontStyle=1;fontSize=13;swimlaneFillColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="1955" y="120" width="620" height="1440" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="a1-env" value="&lt;b&gt;A1. bootstrap_env.py&lt;/b&gt;&lt;br&gt;Tạo/giữ `.env` local&lt;br&gt;MINIO user/password • JDBC password • region&lt;br&gt;&lt;font color=&quot;#475569&quot;&gt;không in hoặc thay secret đã có&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dbeafe;strokeColor=#2563eb;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="75" y="165" width="370" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="a2-fixture" value="&lt;b&gt;A2. ensure_fixture.py&lt;/b&gt;&lt;br&gt;Sinh/validate deterministic E-commerce fixture&lt;br&gt;5 bảng → sorted Snappy Parquet&lt;br&gt;manifest.json bất biến; seed=42; eligible=false" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dbeafe;strokeColor=#2563eb;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="75" y="270" width="370" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="a3-validate" value="&lt;b&gt;A3. lakehouse-bench validate&lt;/b&gt;&lt;br&gt;JSON Schema + duplicate YAML key check&lt;br&gt;runtime lock • data contract • SQL binding&lt;br&gt;common SparkConf = spark-defaults.conf" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="75" y="380" width="370" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="a4-plan" value="&lt;b&gt;A4. lakehouse-bench plan&lt;/b&gt;&lt;br&gt;Resolve config → redact secrets → hash inputs&lt;br&gt;tạo immutable experiment manifest&lt;br&gt;lập lịch paired randomized AB/BA" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="75" y="490" width="370" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="a5-compose" value="&lt;b&gt;A5. docker compose up --build&lt;/b&gt;&lt;br&gt;minio → minio-init → iceberg-rest&lt;br&gt;spark-master → spark-worker&lt;br&gt;network lakehouse + persistent volumes" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dbeafe;strokeColor=#2563eb;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="75" y="600" width="370" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="a6-health" value="&lt;b&gt;A6. Readiness waits&lt;/b&gt;&lt;br&gt;MinIO healthy • init completed&lt;br&gt;REST healthy • master/worker healthy&lt;br&gt;terminal failure → collect compose logs" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="75" y="710" width="370" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="a7-images" value="&lt;b&gt;A7. Capture local image IDs&lt;/b&gt;&lt;br&gt;Spark • MinIO • Iceberg REST&lt;br&gt;ghi container-images.json" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="75" y="815" width="370" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="a8-snapshot" value="&lt;b&gt;A8. Đọc iceberg-prepare.json&lt;/b&gt;&lt;br&gt;Lấy snapshot_id duy nhất&lt;br&gt;truyền cùng ID vào cả hai engine" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="75" y="1010" width="370" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="a9-contract" value="&lt;b&gt;A9. M02 workload contract&lt;/b&gt;&lt;br&gt;storage=ecommerce_iceberg_rest&lt;br&gt;table=lakehouse.bronze.orders&lt;br&gt;typed params: start/end UTC + bucket 10&lt;br&gt;expected schema SHA-256 • result_mode=collect" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="75" y="1110" width="370" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="a10-launch" value="&lt;b&gt;A10. Chạy tuần tự hai fresh apps&lt;/b&gt;&lt;br&gt;1) spark_baseline&lt;br&gt;2) comet_accelerated + comet.properties&lt;br&gt;&lt;font color=&quot;#475569&quot;&gt;mỗi app dùng cùng snapshot + SQL bytes&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dbeafe;strokeColor=#2563eb;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="75" y="1245" width="370" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="b1-cluster" value="&lt;b&gt;B1. Spark Standalone cluster&lt;/b&gt;&lt;br&gt;spark-client: driver / spark-submit&lt;br&gt;master :7077 → worker → 1 executor&lt;br&gt;2 cores • heap 2g • overhead 1g • off-heap 1g" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#ffedd5;strokeColor=#ea580c;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="555" y="165" width="400" height="95" as="geometry"/>
+        </mxCell>
+        <mxCell id="b2-prepare" value="&lt;b&gt;B2. spark-submit prepare_iceberg.py&lt;/b&gt;&lt;br&gt;Fresh Spark baseline application&lt;br&gt;prepare nằm ngoài measured query boundary" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dbeafe;strokeColor=#2563eb;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="555" y="300" width="400" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="b3-fingerprint" value="&lt;b&gt;B3. Runtime fingerprint gate&lt;/b&gt;&lt;br&gt;Spark 4.1.3 • Scala 2.13.17 • Java 17.0.19+10&lt;br&gt;Python 3.12.13 • Iceberg 1.11.0&lt;br&gt;JAR SHA-256 + one class origin + no S3A class&lt;br&gt;baseline phải không nạp Comet" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="555" y="405" width="400" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="b4-source" value="&lt;b&gt;B4. Resolve source from dataset manifest&lt;/b&gt;&lt;br&gt;chỉ nhận relative `.parquet` nằm dưới immutable root&lt;br&gt;không path traversal • file phải tồn tại&lt;br&gt;đọc explicit orders schema" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dbeafe;strokeColor=#2563eb;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="555" y="545" width="400" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="b5-data-gate" value="&lt;b&gt;B5. Required-field gate&lt;/b&gt;&lt;br&gt;order_id/customer_id/order_time/status/payment_method NOT NULL&lt;br&gt;rebuild DataFrame schema để giữ nullability contract&lt;br&gt;từ chối persisted NullType" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="555" y="665" width="400" height="95" as="geometry"/>
+        </mxCell>
+        <mxCell id="b6-write" value="&lt;b&gt;B6. Tạo Iceberg table&lt;/b&gt;&lt;br&gt;CREATE NAMESPACE lakehouse.bronze&lt;br&gt;writeTo(lakehouse.bronze.orders)&lt;br&gt;USING iceberg • format-version=2 • Snappy&lt;br&gt;createOrReplace() → atomic metadata commit" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dcfce7;strokeColor=#16a34a;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="555" y="790" width="400" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="b7-snapshot-query" value="&lt;b&gt;B7. Snapshot + row-count verification&lt;/b&gt;&lt;br&gt;SELECT snapshot_id, manifest_list FROM table.snapshots&lt;br&gt;ORDER BY committed_at DESC LIMIT 1&lt;br&gt;Iceberg row_count phải bằng dataset manifest" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="555" y="925" width="400" height="95" as="geometry"/>
+        </mxCell>
+        <mxCell id="b8-prepare-artifact" value="&lt;b&gt;B8. iceberg-prepare.json&lt;/b&gt;&lt;br&gt;runtime fingerprint • dataset manifest hash&lt;br&gt;table • row_count • snapshot_id • manifest_list&lt;br&gt;canonical JSON; immutable write" style="shape=folder;tabWidth=70;tabHeight=18;tabPosition=left;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="555" y="1050" width="400" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="b9-common-conf" value="&lt;b&gt;B9. Common comparison envelope&lt;/b&gt;&lt;br&gt;AQE=true • ANSI=true • timezone=UTC&lt;br&gt;shuffle partitions=8 • speculation=false&lt;br&gt;Iceberg REST catalog + S3FileIO/MinIO endpoint&lt;br&gt;event log enabled" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dbeafe;strokeColor=#2563eb;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="555" y="1190" width="400" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="b10-snapshot-branch" value="&lt;b&gt;B10. Cùng immutable comparison identity&lt;/b&gt;&lt;br&gt;snapshot ID + dataset/workload/SQL hashes + common SparkConf" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#f8fafc;strokeColor=#475569;strokeWidth=2;fontColor=#0f172a;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="590" y="1340" width="330" height="75" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="c1-minio" value="&lt;b&gt;C1. MinIO service&lt;/b&gt;&lt;br&gt;S3 API :9000 • console :9001&lt;br&gt;source-built pinned tag&lt;br&gt;volume minio-data" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#fee2e2;strokeColor=#dc2626;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="1045" y="165" width="205" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="c2-rest" value="&lt;b&gt;C2. Iceberg REST service&lt;/b&gt;&lt;br&gt;REST API :8181&lt;br&gt;JdbcCatalog + SQLite&lt;br&gt;volume iceberg-catalog" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1270" y="165" width="215" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="c3-bucket" value="&lt;b&gt;C3. minio-init&lt;/b&gt;&lt;br&gt;mc ready → create private bucket `lakehouse`&lt;br&gt;anonymous access = none" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;fontSize=12;spacing=6;" vertex="1" parent="1">
+          <mxGeometry x="1045" y="310" width="205" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="c4-sqlite" value="&lt;b&gt;C4. Catalog database&lt;/b&gt;&lt;br&gt;iceberg_catalog.db&lt;br&gt;giữ catalog records / metadata pointer" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;fontSize=12;spacingTop=7;" vertex="1" parent="1">
+          <mxGeometry x="1270" y="310" width="215" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="c5-s3fileio" value="&lt;b&gt;C5. Iceberg S3FileIO&lt;/b&gt;&lt;br&gt;endpoint http://minio:9000&lt;br&gt;path-style=true • region us-east-1&lt;br&gt;AWS SDK bundle; không dùng Hadoop S3A" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dcfce7;strokeColor=#16a34a;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1045" y="425" width="205" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="c6-catalog-api" value="&lt;b&gt;C6. Catalog operations&lt;/b&gt;&lt;br&gt;namespace/table lookup&lt;br&gt;current metadata location&lt;br&gt;optimistic/atomic commit qua REST" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1270" y="425" width="215" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="c7-table" value="&lt;b&gt;C7. Table identifier&lt;/b&gt;&lt;br&gt;catalog: lakehouse&lt;br&gt;namespace: bronze&lt;br&gt;table: orders&lt;br&gt;warehouse: s3://lakehouse/warehouse" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dcfce7;strokeColor=#16a34a;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="570" width="350" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="c8-metadata" value="&lt;b&gt;C8. Metadata JSON&lt;/b&gt;&lt;br&gt;schema(s) • table properties&lt;br&gt;partition spec(s) • snapshot history" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="715" width="350" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="c9-snapshot" value="&lt;b&gt;C9. Snapshot&lt;/b&gt;&lt;br&gt;immutable logical table version&lt;br&gt;snapshot_id dùng để pin read" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dcfce7;strokeColor=#16a34a;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="825" width="350" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="c10-manifest-list" value="&lt;b&gt;C10. Manifest list&lt;/b&gt;&lt;br&gt;liệt kê manifest files của snapshot" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="930" width="350" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="c11-manifests" value="&lt;b&gt;C11. Iceberg manifests&lt;/b&gt;&lt;br&gt;data-file entries + partition/statistics&lt;br&gt;không phải dataset/workload manifest" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="1025" width="350" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="c12-datafiles" value="&lt;b&gt;C12. Parquet data files&lt;/b&gt;&lt;br&gt;Snappy • columnar • Iceberg-owned objects&lt;br&gt;fixture write hiện không khai báo partition&lt;br&gt;format v2 nhưng chưa có delete files" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#fee2e2;strokeColor=#dc2626;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="1130" width="350" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="c13-read-planning" value="&lt;b&gt;C13. Snapshot-pinned scan planning&lt;/b&gt;&lt;br&gt;Catalog → metadata → snapshot → manifests&lt;br&gt;prune files/columns/predicates khi có thể&lt;br&gt;trả scan tasks cho Spark/Comet" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dcfce7;strokeColor=#16a34a;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="1280" width="350" height="95" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="d1-app" value="&lt;b&gt;D1. Fresh baseline Spark app&lt;/b&gt;&lt;br&gt;run_workload.py --engine spark_baseline&lt;br&gt;không `--conf` Comet" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#f1f5f9;strokeColor=#475569;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1560" y="635" width="350" height="75" as="geometry"/>
+        </mxCell>
+        <mxCell id="d2-runtime" value="&lt;b&gt;D2. Baseline runtime gate&lt;/b&gt;&lt;br&gt;spark.plugins phải rỗng&lt;br&gt;spark.comet.version phải không tồn tại&lt;br&gt;runtime/JAR/classpath khớp lock" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1560" y="740" width="350" height="85" as="geometry"/>
+        </mxCell>
+        <mxCell id="d3-bind" value="&lt;b&gt;D3. Bind Iceberg snapshot&lt;/b&gt;&lt;br&gt;format=iceberg • option snapshot-id&lt;br&gt;validate required columns/type/nullability&lt;br&gt;createOrReplaceTempView(bench_orders)" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dbeafe;strokeColor=#2563eb;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1560" y="855" width="350" height="95" as="geometry"/>
+        </mxCell>
+        <mxCell id="d4-sql" value="&lt;b&gt;D4. Render và parse M02 SQL&lt;/b&gt;&lt;br&gt;validate timestamp YYYY-MM-DD HH:MM:SS&lt;br&gt;bucket ∈ {1,10,50}; không SQL fragment&lt;br&gt;spark.sql() → lazy DataFrame" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dbeafe;strokeColor=#2563eb;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1560" y="980" width="350" height="95" as="geometry"/>
+        </mxCell>
+        <mxCell id="d5-plan" value="&lt;b&gt;D5. Spark plan path&lt;/b&gt;&lt;br&gt;parse/analyze → Catalyst logical optimization&lt;br&gt;Spark physical plan → capture initial plan&lt;br&gt;operators: scan + filter + aggregate" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#ffedd5;strokeColor=#ea580c;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1560" y="1105" width="350" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="d6-collect" value="&lt;b&gt;D6. Baseline materialization&lt;/b&gt;&lt;br&gt;perf_counter start → frame.collect() → stop&lt;br&gt;Spark JVM operators + default shuffle&lt;br&gt;AQE tạo final executed plan" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#f1f5f9;strokeColor=#475569;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1560" y="1225" width="350" height="95" as="geometry"/>
+        </mxCell>
+        <mxCell id="d7-artifact" value="&lt;b&gt;D7. baseline/result.json&lt;/b&gt;&lt;br&gt;runtime • snapshot • SQL/workload hashes&lt;br&gt;schema SHA • canonical result SHA • row count&lt;br&gt;plan analysis • diagnostic wall time&lt;br&gt;initial-plan.txt + final-plan.txt" style="shape=folder;tabWidth=70;tabHeight=18;tabPosition=left;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="1560" y="1360" width="350" height="115" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1-app" value="&lt;b&gt;E1. Fresh Comet Spark app&lt;/b&gt;&lt;br&gt;run_workload.py --engine comet_accelerated&lt;br&gt;inject toàn bộ comet.properties qua --conf" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#d1fae5;strokeColor=#059669;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1985" y="565" width="560" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2-runtime" value="&lt;b&gt;E2. Comet runtime/native gate&lt;/b&gt;&lt;br&gt;plugin = org.apache.spark.CometPlugin • version=1.0.0&lt;br&gt;nativeLoadRequired=true • log “native library initialized”&lt;br&gt;Comet JAR SHA/origin + Spark/Scala/Java/Iceberg lock" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1985" y="665" width="560" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3-bind" value="&lt;b&gt;E3. Bind cùng Iceberg snapshot&lt;/b&gt;&lt;br&gt;cùng table/snapshot_id + required-column gate&lt;br&gt;cùng temp view bench_orders + cùng rendered SQL bytes" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dcfce7;strokeColor=#16a34a;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1985" y="785" width="560" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4-intercept" value="&lt;b&gt;E4. Spark planning + Comet intercept&lt;/b&gt;&lt;br&gt;Spark parse/analyze/Catalyst/AQE vẫn giữ vai trò&lt;br&gt;Comet xét physical operator + expression + plan shape&lt;br&gt;native Iceberg scan và Comet shuffle được bật" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#d1fae5;strokeColor=#059669;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1985" y="895" width="560" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5-decision" value="Operator + expression + stage shape có được Comet 1.0 hỗ trợ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=6;" vertex="1" parent="1">
+          <mxGeometry x="2130" y="1015" width="270" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6-native" value="&lt;b&gt;E6A. Native subtree&lt;/b&gt;&lt;br&gt;Comet native operator(s)&lt;br&gt;DataFusion → Rust + Arrow batches&lt;br&gt;vectorized/off-heap execution" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#d1fae5;strokeColor=#059669;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1985" y="1150" width="255" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7-fallback" value="&lt;b&gt;E6B. Spark JVM fallback&lt;/b&gt;&lt;br&gt;unsupported operator/expression&lt;br&gt;fallback annotation/reason&lt;br&gt;có thể mở rộng hơn một node" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#fee2e2;strokeColor=#dc2626;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="2290" y="1150" width="255" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8-transition" value="&lt;b&gt;E7. Mixed-plan boundary&lt;/b&gt;&lt;br&gt;RowToColumnar / ColumnarToRow&lt;br&gt;native subtree count + transition count&lt;br&gt;conversion có thể tạo overhead" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#ecfdf5;strokeColor=#10b981;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="2130" y="1280" width="270" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9-collect" value="&lt;b&gt;E8. Comet materialization + AQE&lt;/b&gt;&lt;br&gt;perf_counter start → frame.collect() → stop&lt;br&gt;capture final executed plan&lt;br&gt;parse native/fallback/transition/scan implementation&lt;br&gt;Comet native operator count phải &gt; 0" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#d1fae5;strokeColor=#059669;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1985" y="1400" width="275" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10-artifact" value="&lt;b&gt;E9. comet/result.json&lt;/b&gt;&lt;br&gt;cùng identity fields như baseline&lt;br&gt;schema/result hashes • diagnostic wall time&lt;br&gt;plan analysis + native coverage ratio&lt;br&gt;initial/final plans + fallback reasons" style="shape=folder;tabWidth=70;tabHeight=18;tabPosition=left;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="2280" y="1400" width="265" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="verify-band" value="F  CROSS-ENGINE VERIFICATION — READINESS EVIDENCE, KHÔNG PHẢI RESEARCH BENCHMARK" style="swimlane;html=1;horizontal=1;startSize=30;rounded=1;arcSize=6;fillColor=#fffbeb;strokeColor=#d97706;fontColor=#92400e;fontStyle=1;fontSize=13;swimlaneFillColor=#fef3c7;" vertex="1" parent="1">
+          <mxGeometry x="25" y="1585" width="2550" height="205" as="geometry"/>
+        </mxCell>
+        <mxCell id="f1-verify" value="&lt;b&gt;F1. verify_smoke.py&lt;/b&gt;&lt;br&gt;Đọc baseline/result.json + comet/result.json" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dbeafe;strokeColor=#2563eb;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="100" y="1650" width="350" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="f2-checks" value="&lt;b&gt;F2. Exact checks&lt;/b&gt;&lt;br&gt;both passed • schema hash equal • row count equal&lt;br&gt;canonical result hash equal • snapshot equal&lt;br&gt;Comet native &gt; 0 • baseline native = 0" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="600" y="1640" width="470" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="f3-decision" value="Tất cả checks đều true?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;fontColor=#0f172a;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="1635" width="260" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="f4-pass" value="&lt;b&gt;PASS — readiness smoke evidence&lt;/b&gt;&lt;br&gt;verification.json status=passed&lt;br&gt;native Comet execution hiện diện và kết quả khớp&lt;br&gt;&lt;font color=&quot;#b45309&quot;&gt;vẫn không phải số liệu nghiên cứu&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#dcfce7;strokeColor=#16a34a;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1600" y="1635" width="400" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="f5-fail" value="&lt;b&gt;FAIL — dừng smoke&lt;/b&gt;&lt;br&gt;giữ logs/plans/results để chẩn đoán&lt;br&gt;Docker cleanup vẫn chạy; không dùng số đo" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#fee2e2;strokeColor=#dc2626;strokeWidth=2;fontColor=#0f172a;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="2130" y="1635" width="350" height="100" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="planned-band" value="G  LAPTOP BENCHMARK CAMPAIGN — SF1 PRIMARY, SF10 OPTIONAL, CHƯA TRIỂN KHAI ĐẦY ĐỦ" style="swimlane;html=1;horizontal=1;startSize=30;rounded=1;arcSize=6;dashed=1;dashPattern=8 6;fillColor=#f8fafc;strokeColor=#64748b;fontColor=#475569;fontStyle=1;fontSize=13;swimlaneFillColor=#e2e8f0;" vertex="1" parent="1">
+          <mxGeometry x="25" y="1820" width="2550" height="330" as="geometry"/>
+        </mxCell>
+        <mxCell id="g1-ready" value="&lt;b&gt;G1. Prepare/readiness&lt;/b&gt;&lt;br&gt;capacity + runtime + data gates&lt;br&gt;fixed campaign identity" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;dashed=1;fillColor=#f8fafc;strokeColor=#64748b;strokeWidth=2;fontColor=#475569;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="80" y="1900" width="300" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="g2-correct" value="&lt;b&gt;G2. Correctness phase&lt;/b&gt;&lt;br&gt;ngoài measurement set&lt;br&gt;mismatch → invalid_result" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;dashed=1;fillColor=#f8fafc;strokeColor=#64748b;strokeWidth=2;fontColor=#475569;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="455" y="1900" width="300" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="g3-plan" value="&lt;b&gt;G3. Plan capture phase&lt;/b&gt;&lt;br&gt;initial/final AQE + fallback&lt;br&gt;unknown node → partial" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;dashed=1;fillColor=#f8fafc;strokeColor=#64748b;strokeWidth=2;fontColor=#475569;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="830" y="1900" width="300" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="g4-measure" value="&lt;b&gt;G4. Paired AB/BA measurement&lt;/b&gt;&lt;br&gt;fresh apps • warm-up policy&lt;br&gt;timeout/failure/resume; no overwrite" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;dashed=1;fillColor=#f8fafc;strokeColor=#64748b;strokeWidth=2;fontColor=#475569;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1205" y="1900" width="320" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="g5-collectors" value="&lt;b&gt;G5. Metric attribution&lt;/b&gt;&lt;br&gt;SQL execution ID → jobs/stages/tasks&lt;br&gt;cgroup CPU/memory • GC • shuffle • spill&lt;br&gt;sampler overhead &lt; 2%" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;dashed=1;fillColor=#f8fafc;strokeColor=#64748b;strokeWidth=2;fontColor=#475569;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1600" y="1900" width="350" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="g6-raw" value="&lt;b&gt;G6. Immutable raw JSON&lt;/b&gt;&lt;br&gt;one record / engine / run ID&lt;br&gt;provenance + metrics + correctness + plan" style="shape=folder;tabWidth=70;tabHeight=18;tabPosition=left;whiteSpace=wrap;html=1;dashed=1;fillColor=#f8fafc;strokeColor=#64748b;strokeWidth=2;fontColor=#475569;fontSize=13;spacingTop=12;" vertex="1" parent="1">
+          <mxGeometry x="2025" y="1900" width="300" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="g7-summary" value="&lt;b&gt;G7. Rebuildable analysis&lt;/b&gt;&lt;br&gt;paired speedup = T_baseline / T_comet&lt;br&gt;median • IQR • min/max • failures&lt;br&gt;SF10 luôn gắn nhãn exploratory" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;dashed=1;fillColor=#f8fafc;strokeColor=#64748b;strokeWidth=2;fontColor=#475569;fontSize=13;spacing=7;" vertex="1" parent="1">
+          <mxGeometry x="1990" y="2030" width="380" height="95" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="edge-a1-a2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="a1-env" target="a2-fixture"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-a2-a3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="a2-fixture" target="a3-validate"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-a3-a4" value="valid" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="a3-validate" target="a4-plan"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-a4-a5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;endArrow=block;endFill=1;" edge="1" parent="1" source="a4-plan" target="a5-compose"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-a5-a6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="a5-compose" target="a6-health"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-a6-a7" value="all ready" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="a6-health" target="a7-images"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-compose-cluster" value="start services" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="a5-compose" target="b1-cluster"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-compose-minio" value="start" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#dc2626;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="a5-compose" target="c1-minio"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-compose-rest" value="start after bucket" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="a5-compose" target="c2-rest"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-minio-bucket" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#dc2626;endArrow=block;endFill=1;" edge="1" parent="1" source="c1-minio" target="c3-bucket"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-rest-sqlite" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;endArrow=block;endFill=1;" edge="1" parent="1" source="c2-rest" target="c4-sqlite"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-images-prepare" value="spark-submit" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="a7-images" target="b2-prepare"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-cluster-prepare" value="driver/executor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#ea580c;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="b1-cluster" target="b2-prepare"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-b2-b3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="b2-prepare" target="b3-fingerprint"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-b3-b4" value="runtime valid" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="b3-fingerprint" target="b4-source"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-fixture-source" value="manifest-declared Parquet" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="a2-fixture" target="b4-source"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-b4-b5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="b4-source" target="b5-data-gate"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-b5-b6" value="valid rows/schema" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="b5-data-gate" target="b6-write"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-write-catalog" value="REST create/commit" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="b6-write" target="c6-catalog-api"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-write-s3" value="S3FileIO write" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#16a34a;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="b6-write" target="c5-s3fileio"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-s3-table" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#16a34a;endArrow=block;endFill=1;" edge="1" parent="1" source="c5-s3fileio" target="c7-table"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-catalog-table" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;endArrow=block;endFill=1;" edge="1" parent="1" source="c6-catalog-api" target="c7-table"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-c7-c8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;endArrow=block;endFill=1;" edge="1" parent="1" source="c7-table" target="c8-metadata"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-c8-c9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;endArrow=block;endFill=1;" edge="1" parent="1" source="c8-metadata" target="c9-snapshot"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-c9-c10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;endArrow=block;endFill=1;" edge="1" parent="1" source="c9-snapshot" target="c10-manifest-list"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-c10-c11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;endArrow=block;endFill=1;" edge="1" parent="1" source="c10-manifest-list" target="c11-manifests"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-c11-c12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;endArrow=block;endFill=1;" edge="1" parent="1" source="c11-manifests" target="c12-datafiles"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-b6-b7" value="commit complete" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#16a34a;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="b6-write" target="b7-snapshot-query"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-snapshot-query" value="snapshots metadata table" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#16a34a;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="c9-snapshot" target="b7-snapshot-query"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-b7-b8" value="row count matches" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="b7-snapshot-query" target="b8-prepare-artifact"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-b8-a8" value="snapshot_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="b8-prepare-artifact" target="a8-snapshot"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-a8-a9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#7c3aed;endArrow=block;endFill=1;" edge="1" parent="1" source="a8-snapshot" target="a9-contract"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-a9-a10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;endArrow=block;endFill=1;" edge="1" parent="1" source="a9-contract" target="a10-launch"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-a9-common" value="same SQL/config" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="a9-contract" target="b9-common-conf"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-b9-b10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="b9-common-conf" target="b10-snapshot-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-snapshot-readplan" value="pin snapshot" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#16a34a;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="c9-snapshot" target="c13-read-planning"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-a10-d1" value="run first" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#475569;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="a10-launch" target="d1-app"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-a10-e1" value="then run" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="a10-launch" target="e1-app"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-identity-d1" value="common identity" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#475569;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="b10-snapshot-branch" target="d1-app"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-identity-e1" value="common identity + Comet delta" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="b10-snapshot-branch" target="e1-app"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-d1-d2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#475569;endArrow=block;endFill=1;" edge="1" parent="1" source="d1-app" target="d2-runtime"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-d2-d3" value="valid baseline" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="d2-runtime" target="d3-bind"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-readplan-d3" value="scan tasks/data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#16a34a;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="c13-read-planning" target="d3-bind"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-d3-d4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="d3-bind" target="d4-sql"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-d4-d5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="d4-sql" target="d5-plan"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-d5-d6" value="collect triggers execution" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#ea580c;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="d5-plan" target="d6-collect"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-d6-d7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#475569;endArrow=block;endFill=1;" edge="1" parent="1" source="d6-collect" target="d7-artifact"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-e1-e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;endArrow=block;endFill=1;" edge="1" parent="1" source="e1-app" target="e2-runtime"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-e2-e3" value="native initialized" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e2-runtime" target="e3-bind"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-readplan-e3" value="native/Spark scan planning" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#16a34a;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="c13-read-planning" target="e3-bind"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-e3-e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;endArrow=block;endFill=1;" edge="1" parent="1" source="e3-bind" target="e4-intercept"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-e4-e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;endArrow=block;endFill=1;" edge="1" parent="1" source="e4-intercept" target="e5-decision"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-e5-native" value="Có" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e5-decision" target="e6-native"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-e5-fallback" value="Không" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#dc2626;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e5-decision" target="e7-fallback"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-native-transition" value="native output" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e6-native" target="e8-transition"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-fallback-transition" value="JVM output" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#dc2626;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e7-fallback" target="e8-transition"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-transition-collect" value="merge/final materialization" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#10b981;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e8-transition" target="e9-collect"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-e9-e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;endArrow=block;endFill=1;" edge="1" parent="1" source="e9-collect" target="e10-artifact"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-d7-f1" value="baseline result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#475569;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="d7-artifact" target="f1-verify"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-e10-f1" value="Comet result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#059669;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="e10-artifact" target="f1-verify"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-f1-f2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#2563eb;endArrow=block;endFill=1;" edge="1" parent="1" source="f1-verify" target="f2-checks"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-f2-f3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d97706;endArrow=block;endFill=1;" edge="1" parent="1" source="f2-checks" target="f3-decision"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-f3-pass" value="Có" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#16a34a;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="f3-decision" target="f4-pass"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-f3-fail" value="Không" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#dc2626;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="f3-decision" target="f5-fail"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-pass-planned" value="sau khi mọi campaign gate pass" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;dashPattern=6 4;strokeWidth=2;strokeColor=#64748b;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="f4-pass" target="g1-ready"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-g1-g2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeWidth=2;strokeColor=#64748b;endArrow=block;endFill=1;" edge="1" parent="1" source="g1-ready" target="g2-correct"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-g2-g3" value="correct" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeWidth=2;strokeColor=#64748b;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="g2-correct" target="g3-plan"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-g3-g4" value="plan contract understood" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeWidth=2;strokeColor=#64748b;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="g3-plan" target="g4-measure"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-g4-g5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeWidth=2;strokeColor=#64748b;endArrow=block;endFill=1;" edge="1" parent="1" source="g4-measure" target="g5-collectors"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-g5-g6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeWidth=2;strokeColor=#64748b;endArrow=block;endFill=1;" edge="1" parent="1" source="g5-collectors" target="g6-raw"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-g6-g7" value="rebuild from raw" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeWidth=2;strokeColor=#64748b;endArrow=block;endFill=1;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="g6-raw" target="g7-summary"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
