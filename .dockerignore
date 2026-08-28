@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+.env
+.artifacts
+.runtime
+.pytest_cache
+.mypy_cache
+.ruff_cache
+__pycache__
+*.py[cod]
+data/generated
+data/manifests/generated
+results
