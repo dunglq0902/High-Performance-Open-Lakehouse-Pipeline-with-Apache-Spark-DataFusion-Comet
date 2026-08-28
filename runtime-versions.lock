@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-08-24T12:00:00+07:00",
+  "components": [
+    {
+      "name": "apache-spark",
+      "version": "4.1.3",
+      "coordinate_or_image": "apache/spark:4.1.3-scala2.13-java17-python3-ubuntu@sha256:9b0a6c2c860f5e7d18dd5270286fef32a09c7f5a7e2b0dbe5642de8a3a02ab3e",
+      "sha256_or_digest": "sha256:9b0a6c2c860f5e7d18dd5270286fef32a09c7f5a7e2b0dbe5642de8a3a02ab3e",
+      "source_url": "https://hub.docker.com/r/apache/spark/tags",
+      "license": "Apache-2.0",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    },
+    {
+      "name": "scala",
+      "version": "2.13.17",
+      "coordinate_or_image": "org.scala-lang:scala-library:2.13.17",
+      "sha256_or_digest": "b7822c4225243215f185925724a6edff92cf18777a136cc738276c4446fac76c",
+      "source_url": "https://repo.maven.apache.org/maven2/org/scala-lang/scala-library/2.13.17/scala-library-2.13.17.jar",
+      "license": "Apache-2.0",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    },
+    {
+      "name": "java",
+      "version": "17.0.19+10",
+      "coordinate_or_image": "embedded-in:apache/spark:4.1.3-scala2.13-java17-python3-ubuntu@sha256:9b0a6c2c860f5e7d18dd5270286fef32a09c7f5a7e2b0dbe5642de8a3a02ab3e",
+      "sha256_or_digest": "sha256:9b0a6c2c860f5e7d18dd5270286fef32a09c7f5a7e2b0dbe5642de8a3a02ab3e",
+      "source_url": "https://github.com/apache/spark-docker/blob/994aa3719a9d6f759d50d7d9d4ba5ad23f30cb7f/4.1.3/scala2.13-java17-ubuntu/Dockerfile",
+      "license": "GPL-2.0-only WITH Classpath-exception-2.0",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    },
+    {
+      "name": "datafusion-comet",
+      "version": "1.0.0",
+      "coordinate_or_image": "org.apache.datafusion:comet-spark-spark4.1_2.13:1.0.0",
+      "sha256_or_digest": "fc47c35419c20c38743ad5752ae3ae32e7a167923be628878d9caa22f41d6b67",
+      "source_url": "https://repo1.maven.org/maven2/org/apache/datafusion/comet-spark-spark4.1_2.13/1.0.0/comet-spark-spark4.1_2.13-1.0.0.jar",
+      "license": "Apache-2.0",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    },
+    {
+      "name": "apache-iceberg-runtime",
+      "version": "1.11.0",
+      "coordinate_or_image": "org.apache.iceberg:iceberg-spark-runtime-4.1_2.13:1.11.0",
+      "sha256_or_digest": "d6ea6c5d099288daeb7d5a92061bd3d7d8f296492632b42378e5f2f0e3066242",
+      "source_url": "https://repo.maven.apache.org/maven2/org/apache/iceberg/iceberg-spark-runtime-4.1_2.13/1.11.0/iceberg-spark-runtime-4.1_2.13-1.11.0.jar",
+      "license": "Apache-2.0",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    },
+    {
+      "name": "apache-iceberg-aws-bundle",
+      "version": "1.11.0",
+      "coordinate_or_image": "org.apache.iceberg:iceberg-aws-bundle:1.11.0",
+      "sha256_or_digest": "38f01da7e96850cdd05e6616d758b77b43314b712a8808e3f9a824d56976162f",
+      "source_url": "https://repo.maven.apache.org/maven2/org/apache/iceberg/iceberg-aws-bundle/1.11.0/iceberg-aws-bundle-1.11.0.jar",
+      "license": "Apache-2.0",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    },
+    {
+      "name": "iceberg-rest-fixture",
+      "version": "1.10.1",
+      "coordinate_or_image": "apache/iceberg-rest-fixture:1.10.1@sha256:f7d679d30ac9c640bdeb2c015dff533cd3c8f1c7d491ebcb5d436f9a42db1d6f",
+      "sha256_or_digest": "sha256:f7d679d30ac9c640bdeb2c015dff533cd3c8f1c7d491ebcb5d436f9a42db1d6f",
+      "source_url": "https://hub.docker.com/r/apache/iceberg-rest-fixture/tags",
+      "license": "Apache-2.0",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    },
+    {
+      "name": "minio",
+      "version": "RELEASE.2025-10-15T17-29-55Z",
+      "coordinate_or_image": "source-build:https://codeload.github.com/minio/minio/tar.gz/refs/tags/RELEASE.2025-10-15T17-29-55Z",
+      "sha256_or_digest": "be6d0bd3696c3a13a35f02d3a0280b64319c67918b4501c5c3d87f96d000085c",
+      "source_url": "https://github.com/minio/minio/releases/tag/RELEASE.2025-10-15T17-29-55Z",
+      "license": "AGPL-3.0-or-later",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    },
+    {
+      "name": "minio-go-builder",
+      "version": "1.24.8-bookworm",
+      "coordinate_or_image": "golang:1.24.8-bookworm@sha256:4ed690d6649d63c312b99a6120025ec79ce3b542968a37da53d6236c7c61a848",
+      "sha256_or_digest": "sha256:4ed690d6649d63c312b99a6120025ec79ce3b542968a37da53d6236c7c61a848",
+      "source_url": "https://hub.docker.com/_/golang/tags?name=1.24.8-bookworm",
+      "license": "BSD-3-Clause",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    },
+    {
+      "name": "minio-client",
+      "version": "RELEASE.2025-08-13T08-35-41Z",
+      "coordinate_or_image": "minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727",
+      "sha256_or_digest": "sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727",
+      "source_url": "https://hub.docker.com/r/minio/mc/tags",
+      "license": "AGPL-3.0-or-later",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    },
+    {
+      "name": "python",
+      "version": "3.12.13",
+      "coordinate_or_image": "https://www.python.org/ftp/python/3.12.13/Python-3.12.13.tgz",
+      "sha256_or_digest": "0816c4761c97ecdb3f50a3924de0a93fd78cb63ee8e6c04201ddfaedca500b0b",
+      "source_url": "https://www.python.org/downloads/release/python-31213/",
+      "license": "Python-2.0",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    },
+    {
+      "name": "tpch-dbgen",
+      "version": "commit-852ad0a5ee31ebefeed884cea4188781dd9613a3",
+      "coordinate_or_image": "https://codeload.github.com/gregrahn/tpch-kit/tar.gz/852ad0a5ee31ebefeed884cea4188781dd9613a3",
+      "sha256_or_digest": "d0d92c4191c776bcc7bce84e0d2156c3a744c115fb9a9ccbcaac908313708c96",
+      "source_url": "https://github.com/gregrahn/tpch-kit/commit/852ad0a5ee31ebefeed884cea4188781dd9613a3",
+      "license": "TPC End User License Agreement",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    },
+    {
+      "name": "uv",
+      "version": "0.8.15",
+      "coordinate_or_image": "ghcr.io/astral-sh/uv:0.8.15@sha256:a5727064a0de127bdb7c9d3c1383f3a9ac307d9f2d8a391edc7896c54289ced0",
+      "sha256_or_digest": "sha256:a5727064a0de127bdb7c9d3c1383f3a9ac307d9f2d8a391edc7896c54289ced0",
+      "source_url": "https://github.com/astral-sh/uv/releases/tag/0.8.15",
+      "license": "Apache-2.0 OR MIT",
+      "verified_at": "2026-08-24T12:00:00+07:00"
+    }
+  ]
+}

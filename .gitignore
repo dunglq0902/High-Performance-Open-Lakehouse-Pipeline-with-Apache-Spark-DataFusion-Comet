@@ -1,0 +1,31 @@
+.env
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.coverage
+htmlcov/
+
+# Generated data and benchmark artifacts are immutable but not committed by default.
+data/generated/
+data/manifests/generated/
+results/raw/*
+results/normalized/*
+results/reports/*
+!results/raw/.gitkeep
+!results/normalized/.gitkeep
+!results/reports/.gitkeep
+analysis/plots/*
+!analysis/plots/.gitkeep
+spark-events/*
+
+# Local runtime state.
+.runtime/
+.artifacts/
+warehouse/
+metastore/
