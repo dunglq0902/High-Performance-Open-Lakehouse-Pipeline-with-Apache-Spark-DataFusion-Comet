@@ -1,0 +1,103 @@
+schema_version: 1
+id: B01
+name: Daily regional completed-order revenue
+suite: business
+sql_file: ../../business/B01_daily_regional_revenue.sql
+storage_profile: ecommerce_iceberg_rest
+operator_tags:
+  - scan
+  - filter
+  - join
+  - aggregate
+  - sort
+  - limit
+
+relation_bindings:
+  bench_orders:
+    logical_table: orders
+    required_columns:
+      - name: order_id
+        type: BIGINT
+        nullable: false
+      - name: customer_id
+        type: BIGINT
+        nullable: false
+      - name: order_time
+        type: TIMESTAMP
+        nullable: false
+      - name: status
+        type: STRING
+        nullable: false
+  bench_customers:
+    logical_table: customers
+    required_columns:
+      - name: customer_id
+        type: BIGINT
+        nullable: false
+      - name: region
+        type: STRING
+        nullable: false
+  bench_order_items:
+    logical_table: order_items
+    required_columns:
+      - name: order_id
+        type: BIGINT
+        nullable: false
+      - name: quantity
+        type: INT
+        nullable: false
+      - name: unit_price
+        type: DECIMAL(18,2)
+        nullable: false
+      - name: discount
+        type: DECIMAL(5,4)
+        nullable: false
+
+parameters:
+  analysis_start:
+    type: timestamp
+    format: "YYYY-MM-DD HH:MM:SS"
+    timezone: UTC
+    required: true
+  analysis_end:
+    type: timestamp
+    format: "YYYY-MM-DD HH:MM:SS"
+    timezone: UTC
+    required: true
+    exclusive: true
+  result_limit:
+    type: integer
+    allowed_values:
+      - 5000
+    required: true
+
+result_mode: collect
+
+expected_schema:
+  canonicalization: fixed_order_minified_json_v1
+  canonical_json: '{"type":"struct","fields":[{"name":"revenue_date","type":"date","nullable":false,"metadata":{}},{"name":"region","type":"string","nullable":false,"metadata":{}},{"name":"order_count","type":"long","nullable":false,"metadata":{}},{"name":"gross_revenue","type":"decimal(38,4)","nullable":false,"metadata":{}},{"name":"discount_amount","type":"decimal(38,4)","nullable":false,"metadata":{}},{"name":"net_revenue","type":"decimal(38,4)","nullable":false,"metadata":{}}]}'
+  fields:
+    - name: revenue_date
+      type: date
+      nullable: false
+    - name: region
+      type: string
+      nullable: false
+    - name: order_count
+      type: long
+      nullable: false
+    - name: gross_revenue
+      type: decimal(38,4)
+      nullable: false
+    - name: discount_amount
+      type: decimal(38,4)
+      nullable: false
+    - name: net_revenue
+      type: decimal(38,4)
+      nullable: false
+expected_schema_hash: c4d932c678f2d2b8f2d6d67a696a4eb5665a980a0d798503cb179a517dd4f063
+
+correctness:
+  ordering: ordered
+  float_abs_tolerance: 0.0
+  float_rel_tolerance: 0.0

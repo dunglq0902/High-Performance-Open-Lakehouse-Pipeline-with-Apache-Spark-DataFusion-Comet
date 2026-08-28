@@ -1,0 +1,85 @@
+schema_version: 1
+
+experiment:
+  id: EXP-ECOM-SMALL-M02
+  name: M02 primary laptop comparison
+  description: Paired Spark versus Comet M02 measurements on benchmark-eligible E-commerce data
+  seed: 20260827
+  measurement_runs: 10
+  warmup_runs: 2
+  timeout_seconds: 1800
+  schedule: paired_randomized
+  labels:
+    - primary
+    - laptop
+    - warm-storage-cache
+
+workload:
+  suite: micro
+  query_id: M02
+  storage_profile: ecommerce_iceberg_rest
+  data_path: lakehouse.bronze.orders
+  dataset_manifest: data/generated/ecommerce-small-uniform-seed-20260827-v1/manifest.json
+  sql_file: workloads/micro/M02_filter.sql
+  manifest_file: workloads/manifests/micro/M02_filter.yaml
+  result_mode: collect
+  parameters:
+    analysis_start: "2025-01-01 00:00:00"
+    analysis_end: "2026-01-01 00:00:00"
+    selectivity_bucket: 10
+
+spark:
+  runtime_profile: benchmark-laptop
+  common_conf:
+    spark.master: spark://spark-master:7077
+    spark.executor.instances: 1
+    spark.executor.cores: 2
+    spark.executor.memory: 2g
+    spark.executor.memoryOverhead: 1g
+    spark.driver.memory: 1g
+    spark.memory.offHeap.enabled: true
+    spark.memory.offHeap.size: 1g
+    spark.sql.shuffle.partitions: 16
+    spark.sql.adaptive.enabled: true
+    spark.sql.ansi.enabled: true
+    spark.sql.session.timeZone: UTC
+    spark.sql.parquet.compression.codec: snappy
+    spark.speculation: false
+    spark.eventLog.enabled: true
+    spark.eventLog.dir: file:///opt/lakehouse/.artifacts/spark-events
+    spark.local.dir: /opt/lakehouse/.runtime/spark-local
+    spark.sql.extensions: org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+    spark.sql.catalog.lakehouse: org.apache.iceberg.spark.SparkCatalog
+    spark.sql.catalog.lakehouse.type: rest
+    spark.sql.catalog.lakehouse.uri: http://iceberg-rest:8181
+    spark.sql.catalog.lakehouse.warehouse: s3://lakehouse/warehouse
+    spark.sql.catalog.lakehouse.io-impl: org.apache.iceberg.aws.s3.S3FileIO
+    spark.sql.catalog.lakehouse.s3.endpoint: http://minio:9000
+    spark.sql.catalog.lakehouse.s3.path-style-access: true
+    spark.sql.catalog.lakehouse.s3.region: us-east-1
+    spark.sql.catalog.lakehouse.client.region: us-east-1
+
+matrix:
+  engines:
+    - name: spark_baseline
+      spark_conf: {}
+    - name: comet_accelerated
+      spark_conf:
+        spark.plugins: org.apache.spark.CometPlugin
+        spark.shuffle.manager: org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager
+        spark.comet.enabled: true
+        spark.comet.exec.enabled: true
+        spark.comet.nativeLoadRequired: true
+        spark.comet.shuffle.enabled: true
+        spark.comet.exec.memoryPool: fair_unified
+        spark.comet.exec.memoryPool.fraction: "0.90"
+        spark.comet.exec.strictFloatingPoint: true
+        spark.comet.scan.icebergNative.enabled: true
+        spark.comet.explain.fallback.enabled: true
+        spark.comet.explain.format: verbose
+        spark.comet.parquet.write.enabled: false
+        spark.comet.metrics.enabled: false
+
+capacity:
+  estimated_largest_shuffle_bytes: 0
+  safety_margin_ratio: 0.5

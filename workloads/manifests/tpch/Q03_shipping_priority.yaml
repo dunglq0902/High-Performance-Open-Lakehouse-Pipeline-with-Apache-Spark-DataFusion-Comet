@@ -1,0 +1,97 @@
+schema_version: 1
+id: Q03
+name: TPC-H-derived shipping-priority revenue report
+suite: tpch
+sql_file: ../../tpch/Q03_shipping_priority.sql
+storage_profile: tpch_iceberg
+operator_tags:
+  - scan
+  - filter
+  - join
+  - aggregate
+  - sort
+  - limit
+
+relation_bindings:
+  bench_customer:
+    logical_table: customer
+    required_columns:
+      - name: c_custkey
+        type: BIGINT
+        nullable: false
+      - name: c_mktsegment
+        type: STRING
+        nullable: false
+  bench_orders:
+    logical_table: orders
+    required_columns:
+      - name: o_orderkey
+        type: BIGINT
+        nullable: false
+      - name: o_custkey
+        type: BIGINT
+        nullable: false
+      - name: o_orderdate
+        type: DATE
+        nullable: false
+      - name: o_shippriority
+        type: INT
+        nullable: false
+  bench_lineitem:
+    logical_table: lineitem
+    required_columns:
+      - name: l_orderkey
+        type: BIGINT
+        nullable: false
+      - name: l_extendedprice
+        type: DECIMAL(15,2)
+        nullable: false
+      - name: l_discount
+        type: DECIMAL(15,2)
+        nullable: false
+      - name: l_shipdate
+        type: DATE
+        nullable: false
+
+parameters:
+  market_segment:
+    type: string
+    allowed_values:
+      - BUILDING
+    required: true
+  order_date_cutoff:
+    type: date
+    format: YYYY-MM-DD
+    allowed_values:
+      - "1995-03-15"
+    required: true
+  result_limit:
+    type: integer
+    allowed_values:
+      - 10
+    required: true
+
+result_mode: collect
+
+expected_schema:
+  canonicalization: fixed_order_minified_json_v1
+  canonical_json: '{"type":"struct","fields":[{"name":"l_orderkey","type":"long","nullable":false,"metadata":{}},{"name":"revenue","type":"decimal(38,4)","nullable":false,"metadata":{}},{"name":"o_orderdate","type":"date","nullable":false,"metadata":{}},{"name":"o_shippriority","type":"integer","nullable":false,"metadata":{}}]}'
+  fields:
+    - name: l_orderkey
+      type: long
+      nullable: false
+    - name: revenue
+      type: decimal(38,4)
+      nullable: false
+    - name: o_orderdate
+      type: date
+      nullable: false
+    - name: o_shippriority
+      type: integer
+      nullable: false
+expected_schema_hash: b0901537b8f4fa4e545bcf95285b2f80e417be636fd81e4a38edbaa0f14c602a
+
+correctness:
+  ordering: ordered
+  float_abs_tolerance: 0.0
+  float_rel_tolerance: 0.0

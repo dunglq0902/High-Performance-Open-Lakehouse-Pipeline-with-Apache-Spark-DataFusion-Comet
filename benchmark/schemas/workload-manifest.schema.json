@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/lakehouse/schemas/workload-manifest-v1.json",
+  "title": "SQL workload contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "name",
+    "suite",
+    "sql_file",
+    "storage_profile",
+    "operator_tags",
+    "relation_bindings",
+    "parameters",
+    "result_mode",
+    "expected_schema",
+    "expected_schema_hash",
+    "correctness"
+  ],
+  "$defs": {
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "nullable"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "type": {"type": "string", "minLength": 1},
+        "nullable": {"type": "boolean"}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "pattern": "^[MBQ][0-9]{2}$"},
+    "name": {"type": "string", "minLength": 1},
+    "suite": {"enum": ["micro", "business", "tpch"]},
+    "sql_file": {"type": "string", "pattern": "^[^\\0]+\\.sql$"},
+    "storage_profile": {"type": "string", "minLength": 1},
+    "operator_tags": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "relation_bindings": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["logical_table", "required_columns"],
+        "properties": {
+          "logical_table": {"type": "string", "minLength": 1},
+          "required_columns": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/field"}}
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "required"],
+        "properties": {
+          "type": {"enum": ["timestamp", "date", "integer", "number", "string", "boolean"]},
+          "required": {"type": "boolean"},
+          "format": {"type": "string"},
+          "timezone": {"type": "string"},
+          "exclusive": {"type": "boolean"},
+          "allowed_values": {"type": "array", "minItems": 1, "items": {"type": ["string", "integer", "number", "boolean"]}}
+        }
+      }
+    },
+    "result_mode": {"enum": ["collect", "distributed_checksum", "noop_sink"]},
+    "expected_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonicalization", "canonical_json", "fields"],
+      "properties": {
+        "canonicalization": {"const": "fixed_order_minified_json_v1"},
+        "canonical_json": {"type": "string", "minLength": 2},
+        "fields": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/field"}}
+      }
+    },
+    "expected_schema_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "correctness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ordering", "float_abs_tolerance", "float_rel_tolerance"],
+      "properties": {
+        "ordering": {"enum": ["ordered", "unordered"]},
+        "float_abs_tolerance": {"type": "number", "minimum": 0},
+        "float_rel_tolerance": {"type": "number", "minimum": 0}
+      }
+    }
+  }
+}

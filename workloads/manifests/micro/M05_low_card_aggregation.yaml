@@ -1,0 +1,72 @@
+schema_version: 1
+id: M05
+name: Low-cardinality order aggregation
+suite: micro
+sql_file: ../../micro/M05_low_card_aggregation.sql
+storage_profile: ecommerce_iceberg_rest
+operator_tags:
+  - scan
+  - filter
+  - aggregate
+  - sort
+  - limit
+
+relation_bindings:
+  bench_orders:
+    logical_table: orders
+    required_columns:
+      - name: order_id
+        type: BIGINT
+        nullable: false
+      - name: order_time
+        type: TIMESTAMP
+        nullable: false
+      - name: status
+        type: STRING
+        nullable: false
+      - name: payment_method
+        type: STRING
+        nullable: false
+
+parameters:
+  analysis_start:
+    type: timestamp
+    format: "YYYY-MM-DD HH:MM:SS"
+    timezone: UTC
+    required: true
+  analysis_end:
+    type: timestamp
+    format: "YYYY-MM-DD HH:MM:SS"
+    timezone: UTC
+    required: true
+    exclusive: true
+  result_limit:
+    type: integer
+    allowed_values:
+      - 32
+    required: true
+
+result_mode: collect
+
+expected_schema:
+  canonicalization: fixed_order_minified_json_v1
+  canonical_json: '{"type":"struct","fields":[{"name":"status","type":"string","nullable":false,"metadata":{}},{"name":"payment_method","type":"string","nullable":false,"metadata":{}},{"name":"order_count","type":"long","nullable":false,"metadata":{}},{"name":"order_id_checksum","type":"long","nullable":false,"metadata":{}}]}'
+  fields:
+    - name: status
+      type: string
+      nullable: false
+    - name: payment_method
+      type: string
+      nullable: false
+    - name: order_count
+      type: long
+      nullable: false
+    - name: order_id_checksum
+      type: long
+      nullable: false
+expected_schema_hash: 99533aec19d693718a2ef9232c055e6fff3aaef6f4ad90a67802544f7c21077d
+
+correctness:
+  ordering: ordered
+  float_abs_tolerance: 0.0
+  float_rel_tolerance: 0.0

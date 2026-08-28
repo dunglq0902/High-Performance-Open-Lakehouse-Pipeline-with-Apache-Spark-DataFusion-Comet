@@ -1,0 +1,18 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 1
+   +- *(1) CometColumnarToRow
+      +- CometHashAggregate [count#14L, sum#15L], [Final], [count(1), sum(order_id#0L)]
+         +- ShuffleQueryStage 0
+            +- CometExchange SinglePartition, ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=44]
+               +- CometHashAggregate [order_id#0L], [Partial], [partial_count(1), partial_sum(order_id#0L)]
+                  +- CometProject [order_id#0L], [order_id#0L]
+                     +- CometFilter [order_id#0L, order_time#2], (((order_time#2 >= 2025-01-01 00:00:00) AND (order_time#2 < 2026-01-01 00:00:00)) AND (((order_id#0L - 1) % 100) < 10))
+                        +- CometIcebergNativeScan [order_id#0L, order_time#2], s3://lakehouse/warehouse/bronze/orders/metadata/00005-d7ddeae6-6f4e-4a5a-9ab2-cb312159cd73.metadata.json, IcebergScan(table=lakehouse.bronze.orders, schemaId=1, snapshotId=5521914208012683423, branch=null, filters=order_time >= 1735689600000000, order_time < 1767225600000000, runtimeFilters=, groupedBy=), 1
++- == Initial Plan ==
+   CometHashAggregate [count#14L, sum#15L], [Final], [count(1), sum(order_id#0L)]
+   +- CometExchange SinglePartition, ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=44]
+      +- CometHashAggregate [order_id#0L], [Partial], [partial_count(1), partial_sum(order_id#0L)]
+         +- CometProject [order_id#0L], [order_id#0L]
+            +- CometFilter [order_id#0L, order_time#2], (((order_time#2 >= 2025-01-01 00:00:00) AND (order_time#2 < 2026-01-01 00:00:00)) AND (((order_id#0L - 1) % 100) < 10))
+               +- CometIcebergNativeScan [order_id#0L, order_time#2], s3://lakehouse/warehouse/bronze/orders/metadata/00005-d7ddeae6-6f4e-4a5a-9ab2-cb312159cd73.metadata.json, IcebergScan(table=lakehouse.bronze.orders, schemaId=1, snapshotId=5521914208012683423, branch=null, filters=order_time >= 1735689600000000, order_time < 1767225600000000, runtimeFilters=, groupedBy=), 1

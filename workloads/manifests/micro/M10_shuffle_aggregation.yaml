@@ -1,0 +1,87 @@
+schema_version: 1
+id: M10
+name: High-cardinality session shuffle aggregation
+suite: micro
+sql_file: ../../micro/M10_shuffle_aggregation.sql
+storage_profile: ecommerce_iceberg_rest
+operator_tags:
+  - scan
+  - filter
+  - aggregate
+  - shuffle
+  - sort
+  - limit
+
+relation_bindings:
+  bench_events:
+    logical_table: events
+    required_columns:
+      - name: event_id
+        type: BIGINT
+        nullable: false
+      - name: session_id
+        type: STRING
+        nullable: false
+      - name: customer_id
+        type: BIGINT
+        nullable: true
+      - name: event_time
+        type: TIMESTAMP
+        nullable: false
+      - name: event_type
+        type: STRING
+        nullable: false
+      - name: device_type
+        type: STRING
+        nullable: false
+
+parameters:
+  analysis_start:
+    type: timestamp
+    format: "YYYY-MM-DD HH:MM:SS"
+    timezone: UTC
+    required: true
+  analysis_end:
+    type: timestamp
+    format: "YYYY-MM-DD HH:MM:SS"
+    timezone: UTC
+    required: true
+    exclusive: true
+  result_limit:
+    type: integer
+    allowed_values:
+      - 100
+      - 1000
+      - 5000
+    required: true
+
+result_mode: collect
+
+expected_schema:
+  canonicalization: fixed_order_minified_json_v1
+  canonical_json: '{"type":"struct","fields":[{"name":"session_id","type":"string","nullable":false,"metadata":{}},{"name":"customer_id_bucket","type":"long","nullable":false,"metadata":{}},{"name":"device_type","type":"string","nullable":false,"metadata":{}},{"name":"event_count","type":"long","nullable":false,"metadata":{}},{"name":"purchase_event_count","type":"long","nullable":false,"metadata":{}},{"name":"event_id_checksum","type":"long","nullable":false,"metadata":{}}]}'
+  fields:
+    - name: session_id
+      type: string
+      nullable: false
+    - name: customer_id_bucket
+      type: long
+      nullable: false
+    - name: device_type
+      type: string
+      nullable: false
+    - name: event_count
+      type: long
+      nullable: false
+    - name: purchase_event_count
+      type: long
+      nullable: false
+    - name: event_id_checksum
+      type: long
+      nullable: false
+expected_schema_hash: 0832d8dea49d266b76439eeb31b6648943079aa7ffe751a2f48397ee804d25ff
+
+correctness:
+  ordering: ordered
+  float_abs_tolerance: 0.0
+  float_rel_tolerance: 0.0

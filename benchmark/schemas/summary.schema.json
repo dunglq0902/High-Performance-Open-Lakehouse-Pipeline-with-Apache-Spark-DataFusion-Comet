@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/lakehouse/schemas/summary-v1.json",
+  "title": "Rebuildable experiment summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "experiment_id", "workload", "query_id", "storage_profile", "n_total", "n_succeeded", "n_failed", "engines", "paired_speedup", "ratio_of_medians", "paired_resource_savings", "paired_speedup_ci", "paired_failures", "bootstrap", "percentile_method"],
+  "$defs": {
+    "description": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["n", "median", "mean", "stddev", "q1", "q3", "iqr", "min", "max", "p95"],
+      "properties": {
+        "n": {"type": "integer", "minimum": 0},
+        "median": {"type": ["number", "null"]},
+        "mean": {"type": ["number", "null"]},
+        "stddev": {"type": ["number", "null"]},
+        "q1": {"type": ["number", "null"]},
+        "q3": {"type": ["number", "null"]},
+        "iqr": {"type": ["number", "null"]},
+        "min": {"type": ["number", "null"]},
+        "max": {"type": ["number", "null"]},
+        "p95": {"type": ["number", "null"]}
+      }
+    },
+    "resourceSaving": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "absolute_delta", "relative_saving_ratio", "excluded_pair_ids", "zero_baseline_pair_ids"],
+      "properties": {
+        "unit": {"enum": ["seconds", "MiB", "ms"]},
+        "absolute_delta": {"$ref": "#/$defs/description"},
+        "relative_saving_ratio": {"$ref": "#/$defs/description"},
+        "excluded_pair_ids": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 1},
+          "uniqueItems": true
+        },
+        "zero_baseline_pair_ids": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 1},
+          "uniqueItems": true
+        }
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": 1},
+    "experiment_id": {"type": "string"},
+    "workload": {"enum": ["micro", "business", "tpch"]},
+    "query_id": {"type": "string", "pattern": "^[MBQ][0-9]{2}$"},
+    "storage_profile": {"type": "string", "minLength": 1},
+    "n_total": {"type": "integer", "minimum": 0},
+    "n_succeeded": {"type": "integer", "minimum": 0},
+    "n_failed": {"type": "integer", "minimum": 0},
+    "engines": {"type": "object", "additionalProperties": {"$ref": "#/$defs/description"}},
+    "paired_speedup": {"$ref": "#/$defs/description"},
+    "ratio_of_medians": {"type": ["number", "null"], "exclusiveMinimum": 0},
+    "paired_resource_savings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu_core_seconds", "cgroup_memory_peak_mib", "jvm_gc_time_ms", "shuffle_read_mb", "shuffle_write_mb", "disk_spill_mb"],
+      "properties": {
+        "cpu_core_seconds": {"$ref": "#/$defs/resourceSaving"},
+        "cgroup_memory_peak_mib": {"$ref": "#/$defs/resourceSaving"},
+        "jvm_gc_time_ms": {"$ref": "#/$defs/resourceSaving"},
+        "shuffle_read_mb": {"$ref": "#/$defs/resourceSaving"},
+        "shuffle_write_mb": {"$ref": "#/$defs/resourceSaving"},
+        "disk_spill_mb": {"$ref": "#/$defs/resourceSaving"}
+      }
+    },
+    "paired_speedup_ci": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lower", "upper", "confidence_level", "resamples", "seed", "method", "percentile_method"],
+          "properties": {
+            "lower": {"type": "number", "exclusiveMinimum": 0},
+            "upper": {"type": "number", "exclusiveMinimum": 0},
+            "confidence_level": {"const": 0.95},
+            "resamples": {"type": "integer", "minimum": 1},
+            "seed": {"type": "integer"},
+            "method": {"const": "percentile"},
+            "percentile_method": {"const": "linear-r7"}
+          }
+        }
+      ]
+    },
+    "paired_failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pair_id", "missing_engines", "failed_engines"],
+        "properties": {
+          "pair_id": {"type": ["integer", "string"]},
+          "missing_engines": {
+            "type": "array",
+            "items": {"enum": ["spark_baseline", "comet_accelerated"]},
+            "uniqueItems": true
+          },
+          "failed_engines": {
+            "type": "array",
+            "items": {"enum": ["spark_baseline", "comet_accelerated"]},
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["estimator", "confidence_level", "resamples", "seed", "method", "percentile_method"],
+      "properties": {
+        "estimator": {"const": "median-paired-speedup"},
+        "confidence_level": {"const": 0.95},
+        "resamples": {"type": "integer", "minimum": 1},
+        "seed": {"type": "integer"},
+        "method": {"const": "percentile"},
+        "percentile_method": {"const": "linear-r7"}
+      }
+    },
+    "percentile_method": {"const": "linear-r7"}
+  }
+}

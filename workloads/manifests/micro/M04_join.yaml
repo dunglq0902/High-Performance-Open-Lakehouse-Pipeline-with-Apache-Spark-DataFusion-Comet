@@ -1,0 +1,92 @@
+schema_version: 1
+id: M04
+name: Order-item product join
+suite: micro
+sql_file: ../../micro/M04_join.sql
+storage_profile: ecommerce_iceberg_rest
+operator_tags:
+  - scan
+  - join
+  - sort
+  - limit
+
+relation_bindings:
+  bench_order_items:
+    logical_table: order_items
+    required_columns:
+      - name: order_id
+        type: BIGINT
+        nullable: false
+      - name: line_number
+        type: INT
+        nullable: false
+      - name: product_id
+        type: BIGINT
+        nullable: false
+      - name: quantity
+        type: INT
+        nullable: false
+      - name: unit_price
+        type: DECIMAL(18,2)
+        nullable: false
+      - name: discount
+        type: DECIMAL(5,4)
+        nullable: false
+  bench_products:
+    logical_table: products
+    required_columns:
+      - name: product_id
+        type: BIGINT
+        nullable: false
+      - name: product_name
+        type: STRING
+        nullable: false
+      - name: category
+        type: STRING
+        nullable: false
+
+parameters:
+  result_limit:
+    type: integer
+    allowed_values:
+      - 100
+      - 1000
+      - 5000
+    required: true
+
+result_mode: collect
+
+expected_schema:
+  canonicalization: fixed_order_minified_json_v1
+  canonical_json: '{"type":"struct","fields":[{"name":"order_id","type":"long","nullable":false,"metadata":{}},{"name":"line_number","type":"integer","nullable":false,"metadata":{}},{"name":"product_id","type":"long","nullable":false,"metadata":{}},{"name":"product_name","type":"string","nullable":false,"metadata":{}},{"name":"category","type":"string","nullable":false,"metadata":{}},{"name":"quantity","type":"integer","nullable":false,"metadata":{}},{"name":"unit_price","type":"decimal(18,2)","nullable":false,"metadata":{}},{"name":"discount","type":"decimal(5,4)","nullable":false,"metadata":{}}]}'
+  fields:
+    - name: order_id
+      type: long
+      nullable: false
+    - name: line_number
+      type: integer
+      nullable: false
+    - name: product_id
+      type: long
+      nullable: false
+    - name: product_name
+      type: string
+      nullable: false
+    - name: category
+      type: string
+      nullable: false
+    - name: quantity
+      type: integer
+      nullable: false
+    - name: unit_price
+      type: decimal(18,2)
+      nullable: false
+    - name: discount
+      type: decimal(5,4)
+      nullable: false
+expected_schema_hash: d0914898356fbfca0feb5b4c98e902076e34b1e5d442e47800d85aa88cf7de90
+
+correctness:
+  ordering: ordered
+  float_abs_tolerance: 0.0
+  float_rel_tolerance: 0.0

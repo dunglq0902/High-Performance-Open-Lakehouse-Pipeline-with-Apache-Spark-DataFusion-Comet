@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/lakehouse/schemas/experiment-config-v1.json",
+  "title": "Experiment configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "experiment", "workload", "spark", "matrix"],
+  "$defs": {
+    "sparkValue": {"type": ["string", "number", "integer", "boolean"]},
+    "sparkConf": {
+      "type": "object",
+      "propertyNames": {"pattern": "^spark\\."},
+      "additionalProperties": {"$ref": "#/$defs/sparkValue"}
+    }
+  },
+  "properties": {
+    "schema_version": {"const": 1},
+    "experiment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "description",
+        "seed",
+        "measurement_runs",
+        "warmup_runs",
+        "timeout_seconds",
+        "schedule"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Z0-9][A-Z0-9._-]{2,127}$"},
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "seed": {"type": "integer", "minimum": 0},
+        "measurement_runs": {"type": "integer", "minimum": 1},
+        "warmup_runs": {"type": "integer", "minimum": 0},
+        "timeout_seconds": {"type": "integer", "minimum": 1},
+        "schedule": {"const": "paired_randomized"},
+        "labels": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "suite",
+        "query_id",
+        "storage_profile",
+        "data_path",
+        "dataset_manifest",
+        "sql_file",
+        "manifest_file",
+        "result_mode",
+        "parameters"
+      ],
+      "properties": {
+        "suite": {"enum": ["micro", "business", "tpch"]},
+        "query_id": {"type": "string", "pattern": "^[MBQ][0-9]{2}$"},
+        "storage_profile": {"type": "string", "minLength": 1},
+        "data_path": {"type": "string", "minLength": 1},
+        "dataset_manifest": {"type": "string", "minLength": 1},
+        "sql_file": {"type": "string", "pattern": "^[^\\0]+\\.sql$"},
+        "manifest_file": {"type": "string", "pattern": "^[^\\0]+\\.ya?ml$"},
+        "result_mode": {"enum": ["collect", "distributed_checksum", "noop_sink"]},
+        "parameters": {"type": "object", "additionalProperties": {"type": ["string", "integer", "number", "boolean"]}},
+        "scale_factor": {"type": "integer", "enum": [1, 10]}
+      }
+    },
+    "spark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime_profile", "common_conf"],
+      "properties": {
+        "runtime_profile": {"enum": ["smoke-local", "smoke-standalone", "benchmark-laptop"]},
+        "common_conf": {"$ref": "#/$defs/sparkConf"}
+      }
+    },
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engines"],
+      "properties": {
+        "engines": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "spark_conf"],
+            "properties": {
+              "name": {"enum": ["spark_baseline", "comet_accelerated"]},
+              "spark_conf": {"$ref": "#/$defs/sparkConf"}
+            }
+          }
+        }
+      }
+    },
+    "capacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["estimated_largest_shuffle_bytes", "safety_margin_ratio"],
+      "properties": {
+        "estimated_largest_shuffle_bytes": {"type": "integer", "minimum": 0},
+        "safety_margin_ratio": {"type": "number", "minimum": 0.2, "maximum": 1.0}
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/lakehouse/schemas/runtime-lock-v1.json",
+  "title": "Runtime version lock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "verified_at", "components"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "verified_at": {"type": "string", "format": "date-time"},
+    "components": {
+      "type": "array",
+      "minItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "version",
+          "coordinate_or_image",
+          "sha256_or_digest",
+          "source_url",
+          "license",
+          "verified_at"
+        ],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "version": {"type": "string", "minLength": 1},
+          "coordinate_or_image": {"type": "string", "minLength": 1},
+          "sha256_or_digest": {"type": "string", "pattern": "^(sha256:)?[0-9a-f]{64}$"},
+          "source_url": {"type": "string", "format": "uri"},
+          "license": {"type": "string", "minLength": 1},
+          "verified_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  }
+}

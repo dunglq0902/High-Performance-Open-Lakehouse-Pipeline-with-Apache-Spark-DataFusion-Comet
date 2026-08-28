@@ -1,0 +1,63 @@
+schema_version: 1
+id: M02
+name: Controlled-selectivity orders filter
+suite: micro
+sql_file: ../../micro/M02_filter.sql
+storage_profile: ecommerce_iceberg_rest
+operator_tags:
+  - scan
+  - filter
+  - aggregate
+
+relation_bindings:
+  bench_orders:
+    logical_table: orders
+    required_columns:
+      - name: order_id
+        type: BIGINT
+        nullable: false
+      - name: order_time
+        type: TIMESTAMP
+        nullable: false
+
+parameters:
+  analysis_start:
+    type: timestamp
+    format: "YYYY-MM-DD HH:MM:SS"
+    timezone: UTC
+    required: true
+  analysis_end:
+    type: timestamp
+    format: "YYYY-MM-DD HH:MM:SS"
+    timezone: UTC
+    required: true
+    exclusive: true
+  selectivity_bucket:
+    type: integer
+    allowed_values:
+      - 1
+      - 10
+      - 50
+    required: true
+
+result_mode: collect
+
+expected_schema:
+  canonicalization: fixed_order_minified_json_v1
+  canonical_json: '{"type":"struct","fields":[{"name":"selectivity_bucket","type":"integer","nullable":false,"metadata":{}},{"name":"matched_order_count","type":"long","nullable":false,"metadata":{}},{"name":"matched_order_id_sum","type":"long","nullable":false,"metadata":{}}]}'
+  fields:
+    - name: selectivity_bucket
+      type: integer
+      nullable: false
+    - name: matched_order_count
+      type: long
+      nullable: false
+    - name: matched_order_id_sum
+      type: long
+      nullable: false
+expected_schema_hash: 004700eb9934ede176544c1d32a09bd32f150cafb6520eeae5f7d584fc6cfabc
+
+correctness:
+  ordering: unordered
+  float_abs_tolerance: 1.0e-9
+  float_rel_tolerance: 1.0e-9

@@ -1,0 +1,97 @@
+schema_version: 1
+id: Q12
+name: TPC-H-derived shipping modes and order priority
+suite: tpch
+sql_file: ../../tpch/Q12_shipping_modes_and_order_priority.sql
+storage_profile: tpch_iceberg
+operator_tags:
+  - scan
+  - filter
+  - join
+  - case
+  - aggregate
+  - sort
+  - limit
+
+relation_bindings:
+  bench_orders:
+    logical_table: orders
+    required_columns:
+      - name: o_orderkey
+        type: BIGINT
+        nullable: false
+      - name: o_orderpriority
+        type: STRING
+        nullable: false
+  bench_lineitem:
+    logical_table: lineitem
+    required_columns:
+      - name: l_orderkey
+        type: BIGINT
+        nullable: false
+      - name: l_shipmode
+        type: STRING
+        nullable: false
+      - name: l_shipdate
+        type: DATE
+        nullable: false
+      - name: l_commitdate
+        type: DATE
+        nullable: false
+      - name: l_receiptdate
+        type: DATE
+        nullable: false
+
+parameters:
+  ship_mode_1:
+    type: string
+    allowed_values:
+      - MAIL
+      - SHIP
+    required: true
+  ship_mode_2:
+    type: string
+    allowed_values:
+      - MAIL
+      - SHIP
+    required: true
+  receipt_date_start:
+    type: date
+    format: YYYY-MM-DD
+    allowed_values:
+      - "1994-01-01"
+    required: true
+  receipt_date_end:
+    type: date
+    format: YYYY-MM-DD
+    exclusive: true
+    allowed_values:
+      - "1995-01-01"
+    required: true
+  result_limit:
+    type: integer
+    allowed_values:
+      - 10
+    required: true
+
+result_mode: collect
+
+expected_schema:
+  canonicalization: fixed_order_minified_json_v1
+  canonical_json: '{"type":"struct","fields":[{"name":"l_shipmode","type":"string","nullable":false,"metadata":{}},{"name":"high_line_count","type":"long","nullable":false,"metadata":{}},{"name":"low_line_count","type":"long","nullable":false,"metadata":{}}]}'
+  fields:
+    - name: l_shipmode
+      type: string
+      nullable: false
+    - name: high_line_count
+      type: long
+      nullable: false
+    - name: low_line_count
+      type: long
+      nullable: false
+expected_schema_hash: 7a18417b97b3b4088a6914e90470504849fd088488357fb6d517e30a52ac032a
+
+correctness:
+  ordering: ordered
+  float_abs_tolerance: 0.0
+  float_rel_tolerance: 0.0

@@ -1,0 +1,18 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 1
+   +- *(2) HashAggregate(keys=[], functions=[count(1), sum(order_id#0L)], output=[selectivity_bucket#5, matched_order_count#6L, matched_order_id_sum#7L])
+      +- ShuffleQueryStage 0
+         +- Exchange SinglePartition, ENSURE_REQUIREMENTS, [plan_id=38]
+            +- *(1) HashAggregate(keys=[], functions=[partial_count(1), partial_sum(order_id#0L)], output=[count#14L, sum#15L])
+               +- *(1) Project [order_id#0L]
+                  +- *(1) Filter (((order_time#2 >= 2025-01-01 00:00:00) AND (order_time#2 < 2026-01-01 00:00:00)) AND (((order_id#0L - 1) % 100) < 10))
+                     +- *(1) ColumnarToRow
+                        +- BatchScan lakehouse.bronze.orders[order_id#0L, order_time#2] IcebergScan(table=lakehouse.bronze.orders, schemaId=1, snapshotId=5521914208012683423, branch=null, filters=order_time >= 1735689600000000, order_time < 1767225600000000, runtimeFilters=, groupedBy=) RuntimeFilters: []
++- == Initial Plan ==
+   HashAggregate(keys=[], functions=[count(1), sum(order_id#0L)], output=[selectivity_bucket#5, matched_order_count#6L, matched_order_id_sum#7L])
+   +- Exchange SinglePartition, ENSURE_REQUIREMENTS, [plan_id=18]
+      +- HashAggregate(keys=[], functions=[partial_count(1), partial_sum(order_id#0L)], output=[count#14L, sum#15L])
+         +- Project [order_id#0L]
+            +- Filter (((order_time#2 >= 2025-01-01 00:00:00) AND (order_time#2 < 2026-01-01 00:00:00)) AND (((order_id#0L - 1) % 100) < 10))
+               +- BatchScan lakehouse.bronze.orders[order_id#0L, order_time#2] IcebergScan(table=lakehouse.bronze.orders, schemaId=1, snapshotId=5521914208012683423, branch=null, filters=order_time >= 1735689600000000, order_time < 1767225600000000, runtimeFilters=, groupedBy=) RuntimeFilters: []

@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "id": "spark-4.1.3_comet-1.0.0_iceberg-1.11.0_M02_filter",
+  "workload_id": "M02",
+  "source_campaign": {
+    "id": "smoke-20260826T075140Z-9344",
+    "verification_sha256": "f089e5efddd954ede0af70e53d4ad6073af9e02482fcbe056a5ea2da491b4f1f"
+  },
+  "runtime": {
+    "spark_version": "4.1.3",
+    "scala_version": "2.13.17",
+    "java_runtime_version": "17.0.19+10",
+    "python_version": "3.12.13",
+    "comet_version": "1.0.0",
+    "iceberg_version": "1.11.0"
+  },
+  "inputs": {
+    "runtime_lock": {
+      "path": "runtime-versions.lock",
+      "sha256": "7eacccb22ff3b1ff040dcb6116300c446661bca96f065cc4150ba88e581e2f86"
+    },
+    "spark_defaults": {
+      "path": "infrastructure/spark/spark-defaults.conf",
+      "sha256": "32abd7c5e570db324093417796505195ed7c80239bb44cea750e1ee421a3d4b2"
+    },
+    "comet_profile": {
+      "path": "infrastructure/spark/profiles/comet.properties",
+      "sha256": "5b068ee82dfd67e9d6f86368c18d3ad1553c9384818b6c09c3371064b7a03726"
+    },
+    "workload_sql": {
+      "path": "workloads/micro/M02_filter.sql",
+      "sha256": "8c89bd7aaf337e7a5d4b1a38e74570338b19d3beed4918caf9e1e9ecb69f374d"
+    },
+    "workload_manifest": {
+      "path": "workloads/manifests/micro/M02_filter.yaml",
+      "sha256": "04b031c004479d81f73d4993e693ba263c6a64a7614dba1e92240a16a5e5c7c9"
+    }
+  },
+  "dataset": {
+    "manifest_path": "data/generated/ecommerce-fixture-uniform-seed-42-v1/manifest.json",
+    "dataset_id": "ecommerce-fixture-uniform-seed-42-v1",
+    "generation_config_sha256": "541a1d418f5e1d92b3a46a867a0f474b3151831dd4c92470cdd80f9781373f3a",
+    "orders": {
+      "schema_sha256": "f785c66e88c806f0d57e79b24976c0c958a00f8e23dbe35c2422ef7b4979508d",
+      "content_sha256": "9b96ad260f4fa4dbbfbb2ed524caa0a351b3cb679c7f010654ae079c9c2db417",
+      "row_count": 96
+    }
+  },
+  "correctness": {
+    "schema_sha256": "004700eb9934ede176544c1d32a09bd32f150cafb6520eeae5f7d584fc6cfabc",
+    "canonical_result_sha256": "c63a3891063ac4b31b30a7946737b2ce041507f5f0dd5ebe458963285c577977",
+    "row_count": 1
+  },
+  "engines": {
+    "spark_baseline": {
+      "comet_enabled": false,
+      "plan_file": "baseline-final-plan.txt",
+      "plan_sha256": "b245d4244449063ecb811ba4d0fbecda1b24bc94828e74b3adddc1f1ff500af4",
+      "semantic_sha256": "651941fea7136c3011f258dd646c1646d990734c61ed13f50aface772d19f6e3",
+      "operator_sequence": [
+        "HashAggregate",
+        "Exchange",
+        "HashAggregate",
+        "Project",
+        "Filter",
+        "ColumnarToRow",
+        "BatchScan"
+      ],
+      "expected_analysis": {
+        "status": "complete",
+        "total_operators": 6,
+        "comet_native_operators": 0,
+        "spark_fallback_operators": 0,
+        "transition_count": 1,
+        "native_subtree_count": 0,
+        "native_coverage_ratio": null,
+        "fallback_reasons": [],
+        "unknown_nodes": [],
+        "scan_implementations": ["BatchScan"]
+      }
+    },
+    "comet_accelerated": {
+      "comet_enabled": true,
+      "plan_file": "comet-final-plan.txt",
+      "plan_sha256": "2e41720b2a7e658259b2d2625311671bde91883722e46a8aa4e027d0d61b0fd0",
+      "semantic_sha256": "48a170759ed863587135cfdfd6e67d3de333fbc16dc0a5729f3f1117c77d24ba",
+      "operator_sequence": [
+        "CometColumnarToRow",
+        "CometHashAggregate",
+        "CometExchange",
+        "CometHashAggregate",
+        "CometProject",
+        "CometFilter",
+        "CometIcebergNativeScan"
+      ],
+      "expected_analysis": {
+        "status": "complete",
+        "total_operators": 6,
+        "comet_native_operators": 6,
+        "spark_fallback_operators": 0,
+        "transition_count": 1,
+        "native_subtree_count": 1,
+        "native_coverage_ratio": 1.0,
+        "fallback_reasons": [],
+        "unknown_nodes": [],
+        "scan_implementations": ["CometIcebergNativeScan"]
+      }
+    }
+  }
+}

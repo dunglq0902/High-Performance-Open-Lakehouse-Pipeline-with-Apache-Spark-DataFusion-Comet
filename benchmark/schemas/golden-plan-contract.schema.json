@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/lakehouse/schemas/golden-plan-contract-v1.json",
+  "title": "Runtime-locked Spark/Comet golden plan contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "workload_id",
+    "source_campaign",
+    "runtime",
+    "inputs",
+    "dataset",
+    "correctness",
+    "engines"
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "file_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "plan_analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "total_operators",
+        "comet_native_operators",
+        "spark_fallback_operators",
+        "transition_count",
+        "native_subtree_count",
+        "native_coverage_ratio",
+        "fallback_reasons",
+        "unknown_nodes",
+        "scan_implementations"
+      ],
+      "properties": {
+        "status": {"enum": ["complete", "partial"]},
+        "total_operators": {"type": "integer", "minimum": 0},
+        "comet_native_operators": {"type": "integer", "minimum": 0},
+        "spark_fallback_operators": {"type": "integer", "minimum": 0},
+        "transition_count": {"type": "integer", "minimum": 0},
+        "native_subtree_count": {"type": "integer", "minimum": 0},
+        "native_coverage_ratio": {
+          "oneOf": [
+            {"type": "number", "minimum": 0, "maximum": 1},
+            {"type": "null"}
+          ]
+        },
+        "fallback_reasons": {"type": "array", "items": {"type": "string"}},
+        "unknown_nodes": {"type": "array", "items": {"type": "string"}},
+        "scan_implementations": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "comet_enabled",
+        "plan_file",
+        "plan_sha256",
+        "semantic_sha256",
+        "operator_sequence",
+        "expected_analysis"
+      ],
+      "properties": {
+        "comet_enabled": {"type": "boolean"},
+        "plan_file": {"type": "string", "minLength": 1},
+        "plan_sha256": {"$ref": "#/$defs/sha256"},
+        "semantic_sha256": {"$ref": "#/$defs/sha256"},
+        "operator_sequence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "expected_analysis": {"$ref": "#/$defs/plan_analysis"}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": 1},
+    "id": {"type": "string", "minLength": 1},
+    "workload_id": {"type": "string", "minLength": 1},
+    "source_campaign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "verification_sha256"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "verification_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spark_version",
+        "scala_version",
+        "java_runtime_version",
+        "python_version",
+        "comet_version",
+        "iceberg_version"
+      ],
+      "properties": {
+        "spark_version": {"type": "string", "minLength": 1},
+        "scala_version": {"type": "string", "minLength": 1},
+        "java_runtime_version": {"type": "string", "minLength": 1},
+        "python_version": {"type": "string", "minLength": 1},
+        "comet_version": {"type": "string", "minLength": 1},
+        "iceberg_version": {"type": "string", "minLength": 1}
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime_lock",
+        "spark_defaults",
+        "comet_profile",
+        "workload_sql",
+        "workload_manifest"
+      ],
+      "properties": {
+        "runtime_lock": {"$ref": "#/$defs/file_identity"},
+        "spark_defaults": {"$ref": "#/$defs/file_identity"},
+        "comet_profile": {"$ref": "#/$defs/file_identity"},
+        "workload_sql": {"$ref": "#/$defs/file_identity"},
+        "workload_manifest": {"$ref": "#/$defs/file_identity"}
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_path", "dataset_id", "generation_config_sha256", "orders"],
+      "properties": {
+        "manifest_path": {"type": "string", "minLength": 1},
+        "dataset_id": {"type": "string", "minLength": 1},
+        "generation_config_sha256": {"$ref": "#/$defs/sha256"},
+        "orders": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema_sha256", "content_sha256", "row_count"],
+          "properties": {
+            "schema_sha256": {"$ref": "#/$defs/sha256"},
+            "content_sha256": {"$ref": "#/$defs/sha256"},
+            "row_count": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    },
+    "correctness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_sha256", "canonical_result_sha256", "row_count"],
+      "properties": {
+        "schema_sha256": {"$ref": "#/$defs/sha256"},
+        "canonical_result_sha256": {"$ref": "#/$defs/sha256"},
+        "row_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "engines": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spark_baseline", "comet_accelerated"],
+      "properties": {
+        "spark_baseline": {"$ref": "#/$defs/engine"},
+        "comet_accelerated": {"$ref": "#/$defs/engine"}
+      }
+    }
+  }
+}
