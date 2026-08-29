@@ -122,13 +122,18 @@ def raw_record(run, *, status: str = "succeeded") -> dict:
             "canonical_result_sha256": correctness_hash,
         },
         "artifacts": {
-            "event_log": None,
+            "event_log": "event-log",
             "physical_plan": "final-plan.txt",
-            "resource_samples": None,
+            "resource_samples": "resources.json",
             "stdout": "stdout.log",
             "stderr": "stderr.log",
         },
     }
+
+
+def current_provenance(run) -> dict:
+    record = raw_record(run)
+    return {**record["provenance"], "resources": record["resources"]}
 
 
 def runner() -> CampaignRunner:
@@ -160,12 +165,12 @@ def test_campaign_writes_immutable_records_and_resumes(tmp_path: Path) -> None:
         calls.append(run.run_id)
         return raw_record(run)
 
-    first = runner().run(manifest(), tmp_path, execute)
+    first = runner().run(manifest(), tmp_path, execute, expected_provenance=current_provenance)
     assert first.complete
     assert first.executed == 8
     assert first.resumed == 0
 
-    second = runner().run(manifest(), tmp_path, execute)
+    second = runner().run(manifest(), tmp_path, execute, expected_provenance=current_provenance)
     assert second.complete
     assert second.executed == 0
     assert second.resumed == 8
@@ -180,7 +185,7 @@ def test_campaign_refuses_mismatched_resume_and_failed_gate(tmp_path: Path) -> N
     mismatched["run_id"] = "other"
     first_path.write_text(json.dumps(mismatched), encoding="utf-8")
     with pytest.raises(CampaignError, match="disagrees"):
-        runner().run(manifest(), tmp_path, raw_record)
+        runner().run(manifest(), tmp_path, raw_record, expected_provenance=current_provenance)
 
     failed_root = tmp_path / "failed"
 
@@ -196,7 +201,119 @@ def test_campaign_refuses_mismatched_resume_and_failed_gate(tmp_path: Path) -> N
             failed_root,
             fail_comet_correctness,
             continue_on_failure=True,
+            expected_provenance=current_provenance,
         )
+
+
+def test_campaign_requires_current_provenance_to_resume(tmp_path: Path) -> None:
+    first = plan_campaign(manifest())[0]
+    path = first.raw_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(raw_record(first)), encoding="utf-8")
+    calls = []
+
+    def execute(run):
+        calls.append(run.run_id)
+        return raw_record(run)
+
+    with pytest.raises(CampaignError, match="resume requires current campaign provenance"):
+        runner().run(manifest(), tmp_path, execute)
+    assert calls == []
+
+
+def test_campaign_rejects_unplanned_raw_artifacts_before_execution(tmp_path: Path) -> None:
+    experiment_root = tmp_path / manifest()["experiment_id"] / "spark_baseline"
+    experiment_root.mkdir(parents=True)
+    unexpected = experiment_root / "stale-run.json"
+    unexpected.write_text("{}", encoding="utf-8")
+    calls = []
+
+    def execute(run):
+        calls.append(run.run_id)
+        return raw_record(run)
+
+    with pytest.raises(CampaignError, match="unexpected artifacts"):
+        runner().run(manifest(), tmp_path, execute, expected_provenance=current_provenance)
+    assert calls == []
+    assert unexpected.read_text(encoding="utf-8") == "{}"
+
+
+def test_campaign_rejects_incomplete_current_provenance_before_execution(tmp_path: Path) -> None:
+    calls = []
+
+    def execute(run):
+        calls.append(run.run_id)
+        return raw_record(run)
+
+    with pytest.raises(CampaignError, match="current campaign provenance is incomplete"):
+        runner().run(
+            manifest(),
+            tmp_path,
+            execute,
+            expected_provenance=lambda run: {"git_commit": current_provenance(run)["git_commit"]},
+        )
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("field", "stale_value"),
+    [
+        ("git_commit", "1234567"),
+        ("container_image_digest", f"sha256:{'b' * 64}"),
+        ("dataset_manifest_sha256", "b" * 64),
+        ("spark_conf_sha256", "b" * 64),
+        ("sql_sha256", "b" * 64),
+        ("iceberg_snapshot_ids", [2]),
+    ],
+)
+def test_campaign_preflights_all_resume_provenance_before_execution(
+    tmp_path: Path, field: str, stale_value: object
+) -> None:
+    late_run = plan_campaign(manifest())[-1]
+    path = late_run.raw_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    stale = raw_record(late_run)
+    stale["provenance"][field] = stale_value
+    path.write_text(json.dumps(stale), encoding="utf-8")
+    calls = []
+
+    def execute(run):
+        calls.append(run.run_id)
+        return raw_record(run)
+
+    with pytest.raises(CampaignError, match=field):
+        runner().run(manifest(), tmp_path, execute, expected_provenance=current_provenance)
+    assert calls == []
+    assert list(tmp_path.rglob("*.json")) == [path]
+
+
+def test_campaign_rejects_new_record_with_wrong_current_provenance(tmp_path: Path) -> None:
+    def execute(run):
+        record = raw_record(run)
+        record["provenance"]["git_commit"] = "1234567"
+        return record
+
+    with pytest.raises(CampaignError, match="git_commit"):
+        runner().run(manifest(), tmp_path, execute, expected_provenance=current_provenance)
+    assert not list(tmp_path.rglob("*.json"))
+
+
+def test_campaign_preflights_resume_resource_identity_before_execution(tmp_path: Path) -> None:
+    late_run = plan_campaign(manifest())[-1]
+    path = late_run.raw_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    stale = raw_record(late_run)
+    stale["resources"]["cpu_model"] = "different-host"
+    path.write_text(json.dumps(stale), encoding="utf-8")
+    calls = []
+
+    def execute(run):
+        calls.append(run.run_id)
+        return raw_record(run)
+
+    with pytest.raises(CampaignError, match="resource identity"):
+        runner().run(manifest(), tmp_path, execute, expected_provenance=current_provenance)
+    assert calls == []
 
 
 def test_campaign_blocks_correctness_mismatch_before_measurement(tmp_path: Path) -> None:

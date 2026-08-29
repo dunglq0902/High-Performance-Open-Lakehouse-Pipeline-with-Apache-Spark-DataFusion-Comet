@@ -15,10 +15,30 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from analysis.report_publishability import assess_report_publishability
 from benchmark.runner.canonical import write_json
 from benchmark.runner.summary import summarize_records
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+class ReportNotPublishableError(ValueError):
+    """The diagnostic artifacts were built, but the publication policy did not pass."""
+
+
+_PER_EXPERIMENT_ARTIFACT_PATTERNS = (
+    "*.summary.json",
+    "*.latency.svg",
+    "*.native-coverage.svg",
+)
+
+
+def _prune_stale_experiment_artifacts(output_dir: Path, produced: Iterable[Path]) -> None:
+    expected = {path.resolve() for path in produced}
+    for pattern in _PER_EXPERIMENT_ARTIFACT_PATTERNS:
+        for path in output_dir.glob(pattern):
+            if path.is_file() and path.resolve() not in expected:
+                path.unlink()
 
 
 def _load_records(raw_root: Path) -> list[dict[str, Any]]:
@@ -37,8 +57,6 @@ def _load_records(raw_root: Path) -> list[dict[str, Any]]:
                 f"invalid raw record {path}: " + "; ".join(error.message for error in errors)
             )
         records.append(value)
-    if not records:
-        raise ValueError(f"no raw result JSON found below {raw_root}")
     return records
 
 
@@ -164,7 +182,13 @@ def _write_csv(path: Path, records: Iterable[Mapping[str, Any]]) -> None:
             )
 
 
-def build_report(raw_root: Path, output_dir: Path) -> tuple[Path, ...]:
+def build_report(
+    raw_root: Path,
+    output_dir: Path,
+    *,
+    campaign_root: Path | None = None,
+    require_publishable: bool = False,
+) -> tuple[Path, ...]:
     records = _load_records(raw_root)
     if any(str(record["experiment_id"]).upper().startswith("SMOKE") for record in records):
         raise ValueError("smoke/readiness artifacts cannot be promoted into a research report")
@@ -172,26 +196,41 @@ def build_report(raw_root: Path, output_dir: Path) -> tuple[Path, ...]:
     for record in records:
         if record["phase"] == "measurement":
             grouped[_identity(record)].append(record)
-    if not grouped:
-        raise ValueError("raw store contains no measurement records")
-
     output_dir.mkdir(parents=True, exist_ok=True)
+    publication = assess_report_publishability(
+        records,
+        campaign_root if campaign_root is not None else ROOT / ".artifacts/campaigns",
+    )
     produced: list[Path] = []
-    report_lines = [
-        "# Spark vs DataFusion Comet — Rebuildable Research Report",
-        "",
-        "Báo cáo này được tái tạo trực tiếp từ immutable raw-result records.",
-        "",
+    table_lines = [
         "| Experiment | Query | n success/total | Spark median (ms) | Comet median (ms) "
         "| Median paired speedup | Ratio of medians | 95% bootstrap CI | Native coverage |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
+    detail_lines: list[str] = []
     all_measurements: list[dict[str, Any]] = []
     primary_speedups: list[float] = []
     for identity in sorted(grouped):
         experiment_id, _suite, query_id, _storage = identity
         rows = grouped[identity]
-        summary = summarize_records(rows)
+        all_measurements.extend(rows)
+        try:
+            summary = summarize_records(rows)
+        except ValueError as error:
+            publication["publishable"] = False
+            publication["status"] = "failed"
+            publication["issues"].append(
+                f"{experiment_id} report summary could not be built: {error}"
+            )
+            detail_lines.extend(
+                [
+                    "",
+                    f"## {experiment_id} / {query_id}",
+                    "",
+                    f"- Diagnostic summary omitted: {error}",
+                ]
+            )
+            continue
         native = _native_summary(rows)
         paired_median = summary["paired_speedup"]["median"]
         if paired_median is not None:
@@ -217,7 +256,7 @@ def build_report(raw_root: Path, output_dir: Path) -> tuple[Path, ...]:
             if ci is not None
             else "n/a"
         )
-        report_lines.append(
+        table_lines.append(
             "| "
             + " | ".join(
                 [
@@ -238,7 +277,7 @@ def build_report(raw_root: Path, output_dir: Path) -> tuple[Path, ...]:
             )
             + " |"
         )
-        report_lines.extend(
+        detail_lines.extend(
             [
                 "",
                 f"## {experiment_id} / {query_id}",
@@ -263,8 +302,6 @@ def build_report(raw_root: Path, output_dir: Path) -> tuple[Path, ...]:
                 "- P95 is omitted whenever each engine has fewer than 20 successful runs.",
             ]
         )
-        all_measurements.extend(rows)
-
     suite_geometric_mean = (
         math.exp(statistics.fmean(math.log(value) for value in primary_speedups))
         if primary_speedups
@@ -282,19 +319,46 @@ def build_report(raw_root: Path, output_dir: Path) -> tuple[Path, ...]:
         immutable=False,
     )
     produced.append(suite_summary_path)
-    report_lines[3:3] = [
-        "Suite geometric-mean speedup across per-query primary estimators: "
-        + _format_number(suite_geometric_mean)
-        + f" (n={len(primary_speedups)} queries).",
-        "",
-    ]
 
     csv_path = output_dir / "normalized-measurements.csv"
     _write_csv(csv_path, sorted(all_measurements, key=lambda row: str(row["run_id"])))
     produced.append(csv_path)
+
+    publishability_path = output_dir / "report-publishability.json"
+    write_json(publishability_path, publication, immutable=False)
+    produced.append(publishability_path)
+    if publication["publishable"]:
+        banner = [
+            "> **PUBLICATION GATE: PASSED.** The exact reviewed core-suite evidence is complete."
+        ]
+    else:
+        banner = [
+            "> [!WARNING]",
+            "> **DIAGNOSTIC ONLY — NOT PUBLISHABLE.** The core-suite publication gate failed.",
+            "> Review `report-publishability.json` before citing these results.",
+        ]
+    report_lines = [
+        "# Spark vs DataFusion Comet — Rebuildable Research Report",
+        "",
+        *banner,
+        "",
+        "Báo cáo này được tái tạo trực tiếp từ immutable raw-result records.",
+        "",
+        "Suite geometric-mean speedup across per-query primary estimators: "
+        + _format_number(suite_geometric_mean)
+        + f" (n={len(primary_speedups)} queries).",
+        "",
+        *table_lines,
+        *detail_lines,
+    ]
     report_path = output_dir / "technical-report.md"
     report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8", newline="\n")
     produced.append(report_path)
+    _prune_stale_experiment_artifacts(output_dir, produced)
+    if require_publishable and not publication["publishable"]:
+        raise ReportNotPublishableError(
+            "report is diagnostic-only; see " + str(publishability_path)
+        )
     return tuple(produced)
 
 
@@ -302,8 +366,19 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("raw_root", type=Path)
     parser.add_argument("--output", type=Path, default=Path("results/reports"))
+    parser.add_argument("--campaign-root", type=Path, default=ROOT / ".artifacts/campaigns")
+    parser.add_argument("--require-publishable", action="store_true")
     args = parser.parse_args()
-    for path in build_report(args.raw_root, args.output):
+    try:
+        produced = build_report(
+            args.raw_root,
+            args.output,
+            campaign_root=args.campaign_root,
+            require_publishable=args.require_publishable,
+        )
+    except ReportNotPublishableError as error:
+        raise SystemExit(str(error)) from error
+    for path in produced:
         print(path)
 
 

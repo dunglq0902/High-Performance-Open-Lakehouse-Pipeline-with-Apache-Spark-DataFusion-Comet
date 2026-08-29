@@ -21,6 +21,31 @@
     "storage",
     "tables"
   ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"benchmark_eligible": {"const": true}},
+        "required": ["benchmark_eligible"]
+      },
+      "then": {
+        "properties": {
+          "generator": {
+            "required": [
+              "name",
+              "version",
+              "git_commit",
+              "worktree_dirty",
+              "python_version",
+              "python_implementation"
+            ],
+            "properties": {
+              "worktree_dirty": {"const": false}
+            }
+          }
+        }
+      }
+    }
+  ],
   "properties": {
     "schema_version": {"const": 1},
     "dataset_id": {"type": "string", "minLength": 1},
@@ -32,7 +57,9 @@
         "name": {"const": "data.generator"},
         "version": {"const": "1.0.0"},
         "git_commit": {"type": "string", "minLength": 1},
-        "worktree_dirty": {"type": "boolean"}
+        "worktree_dirty": {"type": "boolean"},
+        "python_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "python_implementation": {"const": "CPython"}
       }
     },
     "seed": {"type": "integer", "minimum": 0},

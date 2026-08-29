@@ -24,11 +24,12 @@ _COMMIT_VERSION = re.compile(r"^commit-([0-9a-f]{40})$")
 DBGEN_BUILD_COMMAND = (
     "make",
     "-f",
-    "makefile.suite",
-    "CC=gcc",
+    "Makefile",
+    "CC=gcc -std=gnu89",
     "DATABASE=ORACLE",
     "MACHINE=LINUX",
     "WORKLOAD=TPCH",
+    "dbgen",
 )
 DBGEN_GENERATE_COMMAND = ("./dbgen", "-f", "-s", "1")
 
@@ -197,6 +198,36 @@ def _run_command(arguments: Sequence[str], cwd: Path, environment: Mapping[str, 
     )
 
 
+def _captured_text(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
+def _run_materialization_command(
+    command_runner: CommandRunner,
+    arguments: Sequence[str],
+    cwd: Path,
+    environment: Mapping[str, str],
+) -> None:
+    try:
+        command_runner(arguments, cwd, environment)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
+        observed_command = getattr(error, "cmd", None) or list(arguments)
+        stdout = getattr(error, "stdout", None)
+        if stdout is None:
+            stdout = getattr(error, "output", None)
+        stderr = getattr(error, "stderr", None)
+        raise SourceProvenanceError(
+            "tpch-dbgen command failed\n"
+            f"command: {observed_command!r}\n"
+            f"stdout:\n{_captured_text(stdout)}\n"
+            f"stderr:\n{_captured_text(stderr)}"
+        ) from error
+
+
 def materialize_dbgen_tables(
     source_lock: SourceLock,
     cache_dir: Path,
@@ -223,18 +254,33 @@ def materialize_dbgen_tables(
                 "DSS_CONFIG": str(dbgen_dir.resolve()),
             }
         )
-        command_runner(DBGEN_BUILD_COMMAND, dbgen_dir, environment)
+        _run_materialization_command(
+            command_runner,
+            DBGEN_BUILD_COMMAND,
+            dbgen_dir,
+            environment,
+        )
         binary = dbgen_dir / "dbgen"
         if not binary.is_file():
             raise SourceProvenanceError("tpch-dbgen build did not produce the dbgen binary")
         raw_output_dir.mkdir(parents=True, exist_ok=False)
-        command_runner(DBGEN_GENERATE_COMMAND, dbgen_dir, environment)
-
-    missing = [
-        table_name
-        for table_name in TABLE_ORDER
-        if not (raw_output_dir / f"{table_name}.tbl").is_file()
-        or (raw_output_dir / f"{table_name}.tbl").stat().st_size == 0
-    ]
-    if missing:
-        raise SourceProvenanceError(f"dbgen did not materialize non-empty tables: {missing}")
+        try:
+            _run_materialization_command(
+                command_runner,
+                DBGEN_GENERATE_COMMAND,
+                dbgen_dir,
+                environment,
+            )
+            missing = [
+                table_name
+                for table_name in TABLE_ORDER
+                if not (raw_output_dir / f"{table_name}.tbl").is_file()
+                or (raw_output_dir / f"{table_name}.tbl").stat().st_size == 0
+            ]
+            if missing:
+                raise SourceProvenanceError(
+                    f"dbgen did not materialize non-empty tables: {missing}"
+                )
+        except BaseException:
+            shutil.rmtree(raw_output_dir)
+            raise

@@ -37,6 +37,8 @@ def test_profile_contracts_are_normative_and_non_research() -> None:
     tiny = load_profile(TINY_PROFILE)
 
     assert fixture.seed == 42
+    assert fixture.dataset_revision == 1
+    assert fixture.dataset_id == "ecommerce-fixture-uniform-seed-42-v1"
     assert fixture.benchmark_eligible is False
     assert fixture.counts == {
         "customers": 24,
@@ -58,6 +60,9 @@ def test_profile_contracts_are_normative_and_non_research() -> None:
     small = load_profile(SMALL_PROFILE)
     assert small.benchmark_eligible is True
     assert small.profile_id == "small"
+    assert small.dataset_revision == 2
+    assert small.dataset_id == "ecommerce-small-uniform-seed-20260827-v2"
+    assert small.as_canonical_mapping()["dataset_revision"] == 2
     assert small.counts["orders"] == 1_000_000
 
 
@@ -226,6 +231,111 @@ def test_manifest_validates_against_json_schema(tmp_path: Path) -> None:
         profile_schema["$id"], Resource.from_contents(profile_schema)
     )
     Draft202012Validator(manifest_schema, registry=registry).validate(generated.manifest)
+
+
+def test_benchmark_manifest_schema_requires_python_provenance(tmp_path: Path) -> None:
+    profile = load_profile(FIXTURE_PROFILE)
+    generated = generate_dataset(
+        profile,
+        tmp_path / "dataset",
+        generator_git_commit="test-revision",
+        generator_worktree_dirty=False,
+    )
+    manifest = generated.manifest
+    manifest["benchmark_eligible"] = True
+    del manifest["generator"]["python_version"]
+    del manifest["generator"]["python_implementation"]
+
+    profile_schema = json.loads(
+        (ROOT / "data" / "schemas" / "generator-profile.schema.json").read_text(encoding="utf-8")
+    )
+    manifest_schema = json.loads(
+        (ROOT / "data" / "schemas" / "dataset-manifest.schema.json").read_text(encoding="utf-8")
+    )
+    registry = Registry().with_resource(
+        profile_schema["$id"], Resource.from_contents(profile_schema)
+    )
+    errors = list(Draft202012Validator(manifest_schema, registry=registry).iter_errors(manifest))
+
+    assert {"python_version", "python_implementation"}.issubset(
+        {
+            field
+            for error in errors
+            for field in ("python_version", "python_implementation")
+            if field in error.message
+        }
+    )
+
+
+def test_benchmark_manifest_schema_rejects_dirty_generator_provenance(tmp_path: Path) -> None:
+    profile = load_profile(FIXTURE_PROFILE)
+    generated = generate_dataset(
+        profile,
+        tmp_path / "dataset",
+        generator_git_commit="test-revision",
+        generator_worktree_dirty=False,
+    )
+    manifest = generated.manifest
+    manifest["benchmark_eligible"] = True
+    manifest["generator"]["worktree_dirty"] = True
+
+    profile_schema = json.loads(
+        (ROOT / "data" / "schemas" / "generator-profile.schema.json").read_text(encoding="utf-8")
+    )
+    manifest_schema = json.loads(
+        (ROOT / "data" / "schemas" / "dataset-manifest.schema.json").read_text(encoding="utf-8")
+    )
+    registry = Registry().with_resource(
+        profile_schema["$id"], Resource.from_contents(profile_schema)
+    )
+    errors = list(Draft202012Validator(manifest_schema, registry=registry).iter_errors(manifest))
+
+    assert any("False was expected" in error.message for error in errors)
+
+
+def test_generator_rejects_dirty_benchmark_provenance_before_writing(tmp_path: Path) -> None:
+    profile = replace(load_profile(FIXTURE_PROFILE), benchmark_eligible=True)
+    output = tmp_path / "missing-parent" / "dataset"
+
+    with pytest.raises(ValueError, match="clean generator worktree"):
+        generate_dataset(
+            profile,
+            output,
+            generator_git_commit="test-revision",
+            generator_worktree_dirty=True,
+        )
+
+    assert not output.parent.exists()
+
+
+@pytest.mark.parametrize(
+    ("python_version", "python_implementation", "message"),
+    [
+        ("", "CPython", "exact MAJOR.MINOR.PATCH"),
+        ("3.12", "CPython", "exact MAJOR.MINOR.PATCH"),
+        ("3.12.13", "PyPy", "must be 'CPython'"),
+    ],
+)
+def test_generator_rejects_invalid_python_provenance_before_writing(
+    tmp_path: Path,
+    python_version: str,
+    python_implementation: str,
+    message: str,
+) -> None:
+    profile = load_profile(FIXTURE_PROFILE)
+    output = tmp_path / "missing-parent" / "dataset"
+
+    with pytest.raises(ValueError, match=message):
+        generate_dataset(
+            profile,
+            output,
+            generator_git_commit="test-revision",
+            generator_worktree_dirty=False,
+            generator_python_version=python_version,
+            generator_python_implementation=python_implementation,
+        )
+
+    assert not output.parent.exists()
 
 
 def test_output_is_immutable(tmp_path: Path) -> None:

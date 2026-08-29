@@ -107,6 +107,15 @@ def test_raw_result_schema_rejects_null_success_latency_and_invalid_time() -> No
     assert any("not of type 'number'" in message for message in messages)
 
 
+def test_raw_result_schema_requires_all_success_artifact_paths() -> None:
+    record = deepcopy(valid_raw_record())
+    record["artifacts"]["event_log"] = None  # type: ignore[index]
+
+    messages = [error.message for error in _validator().iter_errors(record)]
+
+    assert any("not of type 'string'" in message for message in messages)
+
+
 def test_raw_result_schema_requires_failure_details_on_failure() -> None:
     record = deepcopy(valid_raw_record())
     record["status"] = "timeout"

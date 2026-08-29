@@ -10,6 +10,7 @@ import platform
 import shutil
 import subprocess
 import time
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,7 +18,13 @@ from typing import Any
 
 from benchmark.cli import command_plan
 from benchmark.parsers.eventlog import parse_event_log
-from benchmark.runner.campaign import CampaignError, CampaignRun, CampaignRunner, run_subprocess
+from benchmark.runner.campaign import (
+    CampaignError,
+    CampaignReport,
+    CampaignRun,
+    CampaignRunner,
+    run_subprocess,
+)
 from benchmark.runner.canonical import sha256_file, sha256_value, write_json
 from benchmark.runner.capacity import (
     CapacitySnapshot,
@@ -26,12 +33,21 @@ from benchmark.runner.capacity import (
     evaluate_capacity_gate,
 )
 from benchmark.runner.config import load_document
+from benchmark.runner.evidence import (
+    ArtifactEvidenceError,
+    RepositoryEvidenceError,
+    artifact_evidence,
+    clean_git_commit,
+    ordered_raw_records,
+    raw_records_sha256,
+)
 from benchmark.runner.record import (
     RawRecordContext,
     build_failure_record,
     build_raw_record,
     load_raw_schema,
 )
+from pipeline.benchmark.run_query import _table_identifier
 from scripts.redact_logs import redact_file, sensitive_values
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -185,15 +201,12 @@ def _runtime_from_lock(engine: str) -> dict[str, object]:
 
 
 def _git_commit() -> str:
-    commit = _run(["git", "rev-parse", "HEAD"]).stdout.strip()
-    dirty = _run(["git", "status", "--porcelain", "--untracked-files=normal"]).stdout.strip()
-    if dirty:
+    try:
+        return clean_git_commit(ROOT)
+    except RepositoryEvidenceError as error:
         raise CampaignError(
-            "primary campaign requires a clean committed worktree; commit the implementation first"
-        )
-    if len(commit) != 40:
-        raise CampaignError(f"unexpected Git commit identity: {commit!r}")
-    return commit
+            "primary campaign requires clean committed Git provenance: " + str(error)
+        ) from error
 
 
 def _cpu_model() -> str:
@@ -428,8 +441,8 @@ def _worker_limits() -> tuple[int, float, int]:
     return memory, cpu_cores, int(swap_text)
 
 
-def _write_admission_artifact(output: Path, value: object) -> Path:
-    """Publish an immutable admission attempt without blocking a later retry."""
+def _write_attempt_artifact(output: Path, value: object) -> Path:
+    """Publish an immutable attempt without blocking a later retry."""
 
     try:
         write_json(output, value)
@@ -443,7 +456,85 @@ def _write_admission_artifact(output: Path, value: object) -> Path:
             return candidate
         except FileExistsError:
             continue
-    raise CampaignError(f"too many admission artifacts beside {output}")
+    raise CampaignError(f"too many attempt artifacts beside {output}")
+
+
+def _load_campaign_records(raw_root: Path, experiment_id: str) -> tuple[dict[str, Any], ...]:
+    campaign_dir = raw_root / experiment_id
+    records: list[dict[str, Any]] = []
+    for path in sorted(campaign_dir.rglob("*.json")):
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise CampaignError(f"cannot hash campaign raw record {path}: {error}") from error
+        if not isinstance(value, dict):
+            raise CampaignError(f"campaign raw record root is not an object: {path}")
+        records.append(value)
+    return tuple(records)
+
+
+def _write_campaign_verification(
+    output: Path,
+    report: CampaignReport,
+    raw_records: Sequence[Mapping[str, Any]],
+    experiment_manifest: Mapping[str, Any],
+    *,
+    repository_root: Path = ROOT,
+) -> Path:
+    """Publish one immutable campaign-completion attempt.
+
+    A successful resume has different ``executed``/``resumed`` counters from the original run.
+    Keeping those invocation facts in attempt artifacts preserves both histories without making a
+    completed campaign fail merely because its base verification is immutable.
+    """
+    if len(raw_records) != report.planned:
+        raise CampaignError(
+            f"campaign verification requires {report.planned} raw records; "
+            f"observed {len(raw_records)}"
+        )
+    run_ids = [str(record.get("run_id", "")) for record in raw_records]
+    if (
+        any(record.get("experiment_id") != report.experiment_id for record in raw_records)
+        or any(not run_id for run_id in run_ids)
+        or len(run_ids) != len(set(run_ids))
+    ):
+        raise CampaignError("campaign verification raw-record identity is invalid")
+    manifest_for_hash = dict(experiment_manifest)
+    declared_manifest_hash = manifest_for_hash.pop("manifest_sha256", None)
+    if (
+        experiment_manifest.get("experiment_id") != report.experiment_id
+        or not isinstance(declared_manifest_hash, str)
+        or declared_manifest_hash != sha256_value(manifest_for_hash)
+    ):
+        raise CampaignError("campaign verification experiment manifest is invalid")
+    ordered_records = ordered_raw_records(raw_records)
+    try:
+        artifacts = artifact_evidence(ordered_records, repository_root)
+    except (ArtifactEvidenceError, OSError) as error:
+        raise CampaignError(
+            f"campaign verification artifact evidence is invalid: {error}"
+        ) from error
+    return _write_attempt_artifact(
+        output,
+        {
+            "schema_version": 1,
+            "status": "passed" if report.complete else "failed",
+            "report": {
+                "experiment_id": report.experiment_id,
+                "planned": report.planned,
+                "executed": report.executed,
+                "resumed": report.resumed,
+                "succeeded": report.succeeded,
+                "failed": report.failed,
+                "complete": report.complete,
+                "raw_record_count": len(ordered_records),
+                "raw_records_sha256": raw_records_sha256(ordered_records),
+                "artifact_file_count": artifacts["file_count"],
+                "artifact_files_sha256": artifacts["sha256"],
+                "experiment_manifest_sha256": declared_manifest_hash,
+            },
+        },
+    )
 
 
 def _capacity_gate(config: dict[str, Any], dataset_manifest: dict[str, Any], output: Path) -> Path:
@@ -462,7 +553,7 @@ def _capacity_gate(config: dict[str, Any], dataset_manifest: dict[str, Any], out
         ),
     )
     result = evaluate_capacity_gate(config, dataset_manifest, snapshot)
-    artifact_path = _write_admission_artifact(output, {"schema_version": 1, **result.as_dict()})
+    artifact_path = _write_attempt_artifact(output, {"schema_version": 1, **result.as_dict()})
     if not result.passed:
         codes = [diagnostic.code for diagnostic in result.failures]
         raise CampaignError(f"benchmark capacity gate failed: {codes}")
@@ -585,9 +676,56 @@ class DockerCampaignExecutor:
         self.spark_image_id = spark_image_id
         self.secrets = secrets
         self.raw_schema = load_raw_schema(RAW_SCHEMA_PATH)
+        self.cpu_model = _cpu_model()
+        self.allocated_cores = 2
+        self.cgroup_memory_limit_mib = 5120
+        self.executor_heap_mib = 2048
+        self.off_heap_mib = 1024
         self.medallion = json.loads(medallion_path.read_text(encoding="utf-8"))
         workload_path = ROOT / config["workload"]["manifest_file"]
         self.workload = load_document(workload_path, WORKLOAD_SCHEMA_PATH)
+
+    def _spark_conf_sha256(self, run: CampaignRun) -> str:
+        engine_conf = next(
+            item["spark_conf"]
+            for item in self.config["matrix"]["engines"]
+            if item["name"] == run.engine
+        )
+        return sha256_value({"common": self.config["spark"]["common_conf"], "engine": engine_conf})
+
+    def _iceberg_snapshot_ids(self) -> list[int]:
+        snapshot_ids: set[int] = set()
+        for binding in self.workload["relation_bindings"].values():
+            _, snapshot_key = _table_identifier(
+                binding["logical_table"], suite=self.workload["suite"]
+            )
+            try:
+                snapshot_id = int(self.medallion["snapshots"][snapshot_key]["snapshot_id"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise CampaignError(
+                    f"current campaign has no pinned snapshot for {snapshot_key}"
+                ) from error
+            snapshot_ids.add(snapshot_id)
+        return sorted(snapshot_ids)
+
+    def expected_provenance(self, run: CampaignRun) -> dict[str, Any]:
+        """Bind resume to the current immutable campaign and runtime inputs."""
+
+        return {
+            "git_commit": self.git_commit,
+            "container_image_digest": self.spark_image_id,
+            "dataset_manifest_sha256": self.manifest["input_hashes"]["dataset_manifest_sha256"],
+            "spark_conf_sha256": self._spark_conf_sha256(run),
+            "sql_sha256": self.manifest["input_hashes"]["workload_sql_sha256"],
+            "iceberg_snapshot_ids": self._iceberg_snapshot_ids(),
+            "resources": {
+                "cpu_model": self.cpu_model,
+                "allocated_cores": self.allocated_cores,
+                "cgroup_memory_limit_mib": self.cgroup_memory_limit_mib,
+                "executor_heap_mib": self.executor_heap_mib,
+                "off_heap_mib": self.off_heap_mib,
+            },
+        }
 
     def _context(
         self,
@@ -597,15 +735,6 @@ class DockerCampaignExecutor:
         event_log: Path | None,
         executor_resources: dict[str, Any] | None,
     ) -> RawRecordContext:
-        engine_conf = next(
-            item["spark_conf"]
-            for item in self.config["matrix"]["engines"]
-            if item["name"] == run.engine
-        )
-        conf_hash = sha256_value(
-            {"common": self.config["spark"]["common_conf"], "engine": engine_conf}
-        )
-
         def relative(path: Path | None) -> str | None:
             if path is None or not path.exists():
                 return None
@@ -614,12 +743,12 @@ class DockerCampaignExecutor:
         return RawRecordContext(
             git_commit=self.git_commit,
             container_image_digest=self.spark_image_id,
-            spark_conf_sha256=conf_hash,
-            cpu_model=_cpu_model(),
-            allocated_cores=2,
-            cgroup_memory_limit_mib=5120,
-            executor_heap_mib=2048,
-            off_heap_mib=1024,
+            spark_conf_sha256=self._spark_conf_sha256(run),
+            cpu_model=self.cpu_model,
+            allocated_cores=self.allocated_cores,
+            cgroup_memory_limit_mib=self.cgroup_memory_limit_mib,
+            executor_heap_mib=self.executor_heap_mib,
+            off_heap_mib=self.off_heap_mib,
             event_log=relative(event_log),
             physical_plan=relative(run_dir / "final-plan.txt"),
             resource_samples=relative(run_dir / "worker-resource-samples.json"),
@@ -637,13 +766,6 @@ class DockerCampaignExecutor:
         failure_class: str,
         message: str,
     ) -> dict[str, Any]:
-        snapshot_ids = sorted(
-            {
-                int(value["snapshot_id"])
-                for value in self.medallion.get("snapshots", {}).values()
-                if isinstance(value, dict) and "snapshot_id" in value
-            }
-        )
         return build_failure_record(
             run,
             context,
@@ -656,7 +778,7 @@ class DockerCampaignExecutor:
             storage_profile=self.config["workload"]["storage_profile"],
             dataset_manifest_sha256=self.manifest["input_hashes"]["dataset_manifest_sha256"],
             sql_sha256=self.manifest["input_hashes"]["workload_sql_sha256"],
-            iceberg_snapshot_ids=snapshot_ids,
+            iceberg_snapshot_ids=self._iceberg_snapshot_ids(),
             runtime=_runtime_from_lock(run.engine),
             raw_schema=self.raw_schema,
         )
@@ -828,22 +950,13 @@ def main() -> None:
             manifest,
             ROOT / "results/raw",
             executor,
+            expected_provenance=executor.expected_provenance,
         )
-        write_json(
+        _write_campaign_verification(
             artifact_root / "campaign-verification.json",
-            {
-                "schema_version": 1,
-                "status": "passed" if report.complete else "failed",
-                "report": {
-                    "experiment_id": report.experiment_id,
-                    "planned": report.planned,
-                    "executed": report.executed,
-                    "resumed": report.resumed,
-                    "succeeded": report.succeeded,
-                    "failed": report.failed,
-                    "complete": report.complete,
-                },
-            },
+            report,
+            _load_campaign_records(ROOT / "results/raw", report.experiment_id),
+            manifest,
         )
         if not report.complete:
             raise CampaignError("campaign did not complete successfully")

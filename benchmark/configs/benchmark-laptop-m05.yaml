@@ -19,7 +19,7 @@ workload:
   query_id: M05
   storage_profile: ecommerce_iceberg_rest
   data_path: lakehouse.bronze.orders
-  dataset_manifest: data/generated/ecommerce-small-uniform-seed-20260827-v1/manifest.json
+  dataset_manifest: data/generated/ecommerce-small-uniform-seed-20260827-v2/manifest.json
   sql_file: workloads/micro/M05_low_card_aggregation.sql
   manifest_file: workloads/manifests/micro/M05_low_card_aggregation.yaml
   result_mode: collect

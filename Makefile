@@ -20,7 +20,7 @@ RESEARCH_CORE_CONFIGS := $(ECOMMERCE_CORE_CONFIGS) $(TPCH_CORE_CONFIGS)
 .PHONY: setup validate validate-research lint test fixture research-data \
 	research-data-ecommerce research-data-tpch plan research-plan \
 	compose-config build up smoke tpch-schema-check benchmark benchmark-one report run-all down \
-	clean-generated
+	report-diagnostic clean-generated
 
 setup:
 	$(PYTHON) scripts/bootstrap_env.py
@@ -88,6 +88,10 @@ benchmark-one: setup lint test research-data compose-config
 		--config $(BENCHMARK_CONFIG)
 
 report:
+	$(UV) run python -m analysis.scripts.build_report results/raw --output results/reports \
+		--require-publishable
+
+report-diagnostic:
 	$(UV) run python -m analysis.scripts.build_report results/raw --output results/reports
 
 run-all:

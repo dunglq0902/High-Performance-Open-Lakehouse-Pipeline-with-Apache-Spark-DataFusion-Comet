@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import re
 import shutil
 import subprocess
@@ -20,6 +21,7 @@ DATASET_PATH = ROOT / "data/generated/tpch-derived-sf1-v1"
 CACHE_PATH = ROOT / ".runtime/tpch-dbgen"
 MINIMUM_FREE_BYTES = 20 * 1024**3
 _GIT_COMMIT = re.compile(r"^[0-9a-f]{40}$")
+_PYTHON_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
 type GitProbe = Callable[[Path], tuple[str, bool]]
 type DiskProbe = Callable[[Path], int]
@@ -28,6 +30,31 @@ type TableMaterializer = Callable[[SourceLock, Path, Path], None]
 
 class PrimaryTpchGateError(RuntimeError):
     """A fail-closed primary SF1 generation gate did not pass."""
+
+
+def _locked_python_version(path: Path = RUNTIME_LOCK_PATH) -> str:
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+        matches = [
+            component
+            for component in document["components"]
+            if isinstance(component, dict) and component.get("name") == "python"
+        ]
+        if (
+            len(matches) != 1
+            or not isinstance(matches[0].get("version"), str)
+            or _PYTHON_VERSION.fullmatch(matches[0]["version"]) is None
+        ):
+            raise ValueError("runtime lock must contain one exact Python version")
+        return str(matches[0]["version"])
+    except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise PrimaryTpchGateError("cannot resolve the locked Python converter runtime") from error
+
+
+def _active_python_version() -> str:
+    if platform.python_implementation() != "CPython":
+        raise PrimaryTpchGateError("primary TPC-H conversion requires CPython")
+    return platform.python_version()
 
 
 def _git_probe(root: Path) -> tuple[str, bool]:
@@ -108,10 +135,12 @@ def ensure_tpch_data(
 
     source_lock = load_source_lock(runtime_lock_path)
     source_provenance = source_lock.as_manifest()
+    locked_python = _locked_python_version(runtime_lock_path)
     if output_dir.exists():
         validate_tpch_dataset(
             output_dir,
             expected_source=source_provenance,
+            expected_python_version=locked_python,
             require_benchmark_eligible=True,
         )
         return {
@@ -127,6 +156,13 @@ def ensure_tpch_data(
         raise PrimaryTpchGateError(
             "TPC-H SF1 data is absent; rerun with --generate after reviewing "
             "license, disk, and time"
+        )
+
+    active_python = _active_python_version()
+    if active_python != locked_python:
+        raise PrimaryTpchGateError(
+            "refusing primary TPC-H conversion with unlocked Python: "
+            f"active={active_python}, locked={locked_python}"
         )
 
     commit = _require_primary_gate(
@@ -146,11 +182,14 @@ def ensure_tpch_data(
             output_dir,
             source_provenance=source_provenance,
             generator_git_commit=commit,
+            generator_python_version=active_python,
+            generator_python_implementation="CPython",
             benchmark_eligible=True,
         )
     validate_tpch_dataset(
         result.dataset_dir,
         expected_source=source_provenance,
+        expected_python_version=locked_python,
         require_benchmark_eligible=True,
     )
     return {

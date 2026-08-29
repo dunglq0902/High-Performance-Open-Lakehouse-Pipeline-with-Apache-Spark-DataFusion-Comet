@@ -20,6 +20,7 @@
   ],
   "properties": {
     "schema_version": {"const": 1},
+    "dataset_revision": {"type": "integer", "minimum": 1},
     "profile_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
     "seed": {"type": "integer", "minimum": 0},
     "benchmark_eligible": {"type": "boolean"},

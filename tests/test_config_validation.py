@@ -12,11 +12,11 @@ from benchmark.runner.config import (
     validate_engine_matrix,
     validate_runtime_profile,
 )
+from scripts.run_research_suite import ECOMMERCE_CORE_CONFIGS
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT_SCHEMA = ROOT / "benchmark/schemas/experiment-config.schema.json"
 SMOKE_CONFIG = ROOT / "benchmark/configs/smoke-m02.yaml"
-LAPTOP_CONFIG = ROOT / "benchmark/configs/benchmark-laptop-m02.yaml"
 
 
 def valid_config() -> dict:
@@ -142,9 +142,13 @@ def test_laptop_runtime_profile_matches_reviewed_property_files() -> None:
         validate_runtime_profile(config, ROOT)
 
 
-def test_checked_in_laptop_config_is_schema_valid_and_runtime_exact() -> None:
-    config = load_document(LAPTOP_CONFIG, EXPERIMENT_SCHEMA)
+@pytest.mark.parametrize("relative_config", ECOMMERCE_CORE_CONFIGS)
+def test_checked_in_laptop_config_is_schema_valid_and_runtime_exact(
+    relative_config: str,
+) -> None:
+    config = load_document(ROOT / relative_config, EXPERIMENT_SCHEMA)
     validate_engine_matrix(config)
     validate_runtime_profile(config, ROOT)
     assert config["experiment"]["measurement_runs"] == 10
     assert config["experiment"]["warmup_runs"] == 2
+    assert config["workload"]["dataset_manifest"].endswith("seed-20260827-v2/manifest.json")

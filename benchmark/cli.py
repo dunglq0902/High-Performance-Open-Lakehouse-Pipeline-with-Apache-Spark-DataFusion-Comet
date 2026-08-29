@@ -51,7 +51,12 @@ def safe_repo_path(root: Path, value: str) -> Path:
     return path
 
 
-def _validate_inputs(root: Path, config: dict[str, Any]) -> tuple[Path, Path, Path]:
+def _validate_inputs(
+    root: Path,
+    config: dict[str, Any],
+    *,
+    expected_python_version: str,
+) -> tuple[Path, Path, Path]:
     schema_dir = root / "benchmark/schemas"
     workload = config["workload"]
     sql_path = safe_repo_path(root, workload["sql_file"])
@@ -125,7 +130,11 @@ def _validate_inputs(root: Path, config: dict[str, Any]) -> tuple[Path, Path, Pa
     if config_workload["suite"] == "tpch":
         try:
             source = load_source_lock(root / "runtime-versions.lock").as_manifest()
-            validate_tpch_dataset(dataset_path.parent, expected_source=source)
+            validate_tpch_dataset(
+                dataset_path.parent,
+                expected_source=source,
+                expected_python_version=expected_python_version,
+            )
         except (TpchContractError, SourceProvenanceError) as error:
             raise ConfigurationError(str(error)) from error
         if dataset.get("scale_factor") != config_workload.get("scale_factor"):
@@ -153,7 +162,10 @@ def _validate_inputs(root: Path, config: dict[str, Any]) -> tuple[Path, Path, Pa
                 "dataset manifest schema validation failed:\n- " + "\n- ".join(messages)
             )
         try:
-            validate_dataset(dataset_path.parent)
+            validate_dataset(
+                dataset_path.parent,
+                expected_python_version=expected_python_version,
+            )
         except DatasetValidationError as error:
             raise ConfigurationError(str(error)) from error
     logical_tables = {
@@ -175,8 +187,15 @@ def command_validate(args: argparse.Namespace) -> int:
     config_path = safe_repo_path(root, args.config)
     config = load_experiment(config_path, schema_dir)
     validate_smoke_runtime_profile(config, root)
-    validate_runtime_lock(root / "runtime-versions.lock", schema_dir / "runtime-lock.schema.json")
-    _validate_inputs(root, config)
+    runtime_lock = validate_runtime_lock(
+        root / "runtime-versions.lock", schema_dir / "runtime-lock.schema.json"
+    )
+    components = {component["name"]: component for component in runtime_lock["components"]}
+    _validate_inputs(
+        root,
+        config,
+        expected_python_version=str(components["python"]["version"]),
+    )
     print(f"valid: {config['experiment']['id']}")
     return 0
 
@@ -188,8 +207,13 @@ def command_plan(args: argparse.Namespace) -> int:
     config = load_experiment(config_path, schema_dir)
     validate_smoke_runtime_profile(config, root)
     lock_path = root / "runtime-versions.lock"
-    validate_runtime_lock(lock_path, schema_dir / "runtime-lock.schema.json")
-    sql_path, workload_manifest_path, dataset_manifest_path = _validate_inputs(root, config)
+    runtime_lock = validate_runtime_lock(lock_path, schema_dir / "runtime-lock.schema.json")
+    components = {component["name"]: component for component in runtime_lock["components"]}
+    sql_path, workload_manifest_path, dataset_manifest_path = _validate_inputs(
+        root,
+        config,
+        expected_python_version=str(components["python"]["version"]),
+    )
     common_profile_path, comet_profile_path = runtime_profile_paths(config, root)
     manifest = build_experiment_manifest(
         config,

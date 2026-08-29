@@ -77,6 +77,39 @@ class CampaignExecutor(Protocol):
     def __call__(self, run: CampaignRun) -> Mapping[str, Any]: ...
 
 
+RunProvenanceResolver = Callable[[CampaignRun], Mapping[str, Any]]
+
+_RESUME_PROVENANCE_FIELDS = (
+    "git_commit",
+    "container_image_digest",
+    "dataset_manifest_sha256",
+    "spark_conf_sha256",
+    "sql_sha256",
+    "iceberg_snapshot_ids",
+)
+_RESUME_RESOURCE_FIELDS = (
+    "cpu_model",
+    "allocated_cores",
+    "cgroup_memory_limit_mib",
+    "executor_heap_mib",
+    "off_heap_mib",
+)
+
+
+def _assert_complete_expected_provenance(expected_provenance: Mapping[str, Any]) -> None:
+    missing = [field for field in _RESUME_PROVENANCE_FIELDS if field not in expected_provenance]
+    if missing:
+        raise CampaignError("current campaign provenance is incomplete: " + ", ".join(missing))
+    resources = expected_provenance.get("resources")
+    if not isinstance(resources, Mapping):
+        raise CampaignError("current campaign provenance is missing resource identity")
+    missing_resources = [field for field in _RESUME_RESOURCE_FIELDS if field not in resources]
+    if missing_resources:
+        raise CampaignError(
+            "current campaign resource identity is incomplete: " + ", ".join(missing_resources)
+        )
+
+
 def _engine(value: object) -> EngineName:
     if value == "spark_baseline":
         return "spark_baseline"
@@ -170,6 +203,8 @@ def validate_run_record(
     record: Mapping[str, Any],
     run: CampaignRun,
     validator: Draft202012Validator,
+    *,
+    expected_provenance: Mapping[str, Any] | None = None,
 ) -> None:
     """Validate the raw schema plus fields bound by the campaign plan."""
 
@@ -190,6 +225,31 @@ def validate_run_record(
     ]
     if mismatches:
         raise CampaignError("raw record disagrees with planned run: " + "; ".join(mismatches))
+    if expected_provenance is None:
+        return
+    _assert_complete_expected_provenance(expected_provenance)
+    provenance = record["provenance"]
+    provenance_mismatches = [
+        f"{field}={provenance.get(field)!r} (expected {expected_provenance[field]!r})"
+        for field in _RESUME_PROVENANCE_FIELDS
+        if provenance.get(field) != expected_provenance[field]
+    ]
+    if provenance_mismatches:
+        raise CampaignError(
+            "raw record provenance disagrees with current campaign: "
+            + "; ".join(provenance_mismatches)
+        )
+    expected_resources = expected_provenance["resources"]
+    resource_mismatches = [
+        f"{field}={record['resources'].get(field)!r} (expected {expected_resources[field]!r})"
+        for field in _RESUME_RESOURCE_FIELDS
+        if record["resources"].get(field) != expected_resources[field]
+    ]
+    if resource_mismatches:
+        raise CampaignError(
+            "raw record resource identity disagrees with current campaign: "
+            + "; ".join(resource_mismatches)
+        )
 
 
 def _load_record(path: Path) -> dict[str, Any]:
@@ -265,11 +325,50 @@ class CampaignRunner:
         executor: CampaignExecutor,
         *,
         continue_on_failure: bool = False,
+        expected_provenance: RunProvenanceResolver | None = None,
     ) -> CampaignReport:
         plan = plan_campaign(manifest)
         records: dict[str, Mapping[str, Any]] = {}
         executed = 0
         resumed = 0
+
+        expected_paths = {run.raw_path(raw_root): run for run in plan}
+        experiment_root = raw_root / plan[0].experiment_id
+        existing_files = (
+            {path for path in experiment_root.rglob("*") if path.is_file()}
+            if experiment_root.exists()
+            else set()
+        )
+        unexpected_files = sorted(existing_files - expected_paths.keys())
+        if unexpected_files:
+            rendered = ", ".join(path.as_posix() for path in unexpected_files)
+            raise CampaignError(f"raw campaign directory contains unexpected artifacts: {rendered}")
+        existing_paths = {run.run_id: path for path, run in expected_paths.items() if path.exists()}
+        if existing_paths and expected_provenance is None:
+            raise CampaignError(
+                "resume requires current campaign provenance before existing raw artifacts "
+                "can be used"
+            )
+        expected_by_run = (
+            {run.run_id: dict(expected_provenance(run)) for run in plan}
+            if expected_provenance is not None
+            else {}
+        )
+        for provenance in expected_by_run.values():
+            _assert_complete_expected_provenance(provenance)
+        resumable_records: dict[str, Mapping[str, Any]] = {}
+        for run in plan:
+            path = existing_paths.get(run.run_id)
+            if path is None:
+                continue
+            existing_record = _load_record(path)
+            validate_run_record(
+                existing_record,
+                run,
+                self._validator,
+                expected_provenance=expected_by_run[run.run_id],
+            )
+            resumable_records[run.run_id] = existing_record
 
         for run in plan:
             if run.phase == "measurement":
@@ -277,13 +376,17 @@ class CampaignRunner:
                 _assert_plan_gate(records)
 
             path = run.raw_path(raw_root)
-            if path.exists():
-                record = _load_record(path)
-                validate_run_record(record, run, self._validator)
+            if run.run_id in resumable_records:
+                record = resumable_records[run.run_id]
                 resumed += 1
             else:
                 record = dict(executor(run))
-                validate_run_record(record, run, self._validator)
+                validate_run_record(
+                    record,
+                    run,
+                    self._validator,
+                    expected_provenance=expected_by_run.get(run.run_id),
+                )
                 write_json(path, record)
                 executed += 1
             records[run.run_id] = record

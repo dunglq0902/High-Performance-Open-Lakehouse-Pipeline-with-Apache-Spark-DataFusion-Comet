@@ -4,7 +4,9 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
-from analysis.scripts.build_report import build_report
+import pytest
+
+from analysis.scripts.build_report import ReportNotPublishableError, build_report
 
 HASH = "a" * 64
 
@@ -106,11 +108,38 @@ def test_report_is_rebuildable_and_suppresses_small_sample_p95(tmp_path: Path) -
     assert "paired CPU saving ratio" in report
     assert "[2.000, 2.000]" in report
     assert "100.00%" in report
+    assert "DIAGNOSTIC ONLY — NOT PUBLISHABLE" in report
     summary = json.loads((output / "EXP-REPORT-M02.summary.json").read_text())
     assert summary["engines"]["spark_baseline"]["p95"] is None
     suite_summary = json.loads((output / "suite-summary.json").read_text())
     assert suite_summary["geometric_mean_speedup"] == 2.0
     assert (output / "EXP-REPORT-M02.latency.svg").read_text().startswith("<svg")
+    publication = json.loads((output / "report-publishability.json").read_text())
+    assert publication["publishable"] is False
+
+
+def test_strict_report_fails_only_after_diagnostic_artifacts_are_written(tmp_path: Path) -> None:
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    for record in (
+        _record("spark_baseline", 1, 200.0),
+        _record("comet_accelerated", 1, 100.0),
+    ):
+        (raw / f"{record['run_id']}.json").write_text(json.dumps(record), encoding="utf-8")
+    output = tmp_path / "report"
+
+    with pytest.raises(ReportNotPublishableError, match="diagnostic-only"):
+        build_report(
+            raw,
+            output,
+            campaign_root=tmp_path / "campaigns",
+            require_publishable=True,
+        )
+
+    assert (output / "report-publishability.json").is_file()
+    assert (output / "technical-report.md").is_file()
+    assert (output / "normalized-measurements.csv").is_file()
+    assert "DIAGNOSTIC ONLY" in (output / "technical-report.md").read_text(encoding="utf-8")
 
 
 def test_report_rejects_smoke_identity(tmp_path: Path) -> None:
@@ -125,3 +154,28 @@ def test_report_rejects_smoke_identity(tmp_path: Path) -> None:
         assert "cannot be promoted" in str(error)
     else:
         raise AssertionError("smoke record was promoted into a research report")
+
+
+def test_rebuild_prunes_stale_per_experiment_artifacts(tmp_path: Path) -> None:
+    first_raw = tmp_path / "first-raw"
+    first_raw.mkdir()
+    for record in (
+        _record("spark_baseline", 1, 200.0),
+        _record("comet_accelerated", 1, 100.0),
+    ):
+        (first_raw / f"{record['run_id']}.json").write_text(json.dumps(record), encoding="utf-8")
+    output = tmp_path / "report"
+    build_report(first_raw, output)
+    stale = (
+        output / "EXP-REPORT-M02.summary.json",
+        output / "EXP-REPORT-M02.latency.svg",
+        output / "EXP-REPORT-M02.native-coverage.svg",
+    )
+    assert all(path.is_file() for path in stale)
+
+    empty_raw = tmp_path / "empty-raw"
+    empty_raw.mkdir()
+    build_report(empty_raw, output)
+
+    assert all(not path.exists() for path in stale)
+    assert (output / "technical-report.md").is_file()

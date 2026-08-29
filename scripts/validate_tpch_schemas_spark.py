@@ -15,17 +15,28 @@ SCHEMA_ROOT = ROOT / "benchmark/schemas"
 CONFIGS = tuple(sorted((ROOT / "benchmark/configs").glob("benchmark-laptop-tpch-*.yaml")))
 
 
-def main() -> None:
-    from pyspark.sql import SparkSession
+def _configure_schema_check(builder: Any) -> Any:
+    """Configure the isolated analyzer without creating research event logs.
 
-    spark = (
-        SparkSession.builder.master("local[1]")
+    The container inherits ``spark.eventLog.enabled=true`` from ``spark-defaults.conf``. That is
+    required for measured campaigns, but this local, read-only analyzer has no event-log consumer.
+    Disabling it also avoids Hadoop trying to chmod a newly created event-log directory on a
+    Docker Desktop bind mount, which Windows filesystems do not support.
+    """
+    return (
+        builder.master("local[1]")
         .appName("validate-tpch-workload-schemas")
+        .config("spark.eventLog.enabled", "false")
         .config("spark.ui.enabled", "false")
         .config("spark.sql.ansi.enabled", "true")
         .config("spark.sql.session.timeZone", "UTC")
-        .getOrCreate()
     )
+
+
+def main() -> None:
+    from pyspark.sql import SparkSession
+
+    spark = _configure_schema_check(SparkSession.builder).getOrCreate()
     results: dict[str, dict[str, Any]] = {}
     try:
         for config_path in CONFIGS:

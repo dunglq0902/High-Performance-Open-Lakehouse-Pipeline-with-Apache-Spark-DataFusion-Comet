@@ -177,6 +177,15 @@
               "row_count": {"type": "integer", "minimum": 0},
               "canonical_result_sha256": {"$ref": "#/$defs/sha256"}
             }
+          },
+          "artifacts": {
+            "properties": {
+              "event_log": {"type": "string", "minLength": 1},
+              "physical_plan": {"type": "string", "minLength": 1},
+              "resource_samples": {"type": "string", "minLength": 1},
+              "stdout": {"type": "string", "minLength": 1},
+              "stderr": {"type": "string", "minLength": 1}
+            }
           }
         }
       },

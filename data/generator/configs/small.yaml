@@ -1,6 +1,7 @@
 # Primary benchmark-eligible E-commerce profile. Generation is intentionally explicit because
 # this immutable dataset is substantially larger than the development fixtures.
 schema_version: 1
+dataset_revision: 2
 profile_id: small
 seed: 20260827
 benchmark_eligible: true

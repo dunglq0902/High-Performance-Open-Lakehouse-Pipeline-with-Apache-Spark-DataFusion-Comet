@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
+import re
 import shutil
 import struct
 import tempfile
@@ -31,10 +33,18 @@ from data.tpch.contract import (
 from data.tpch.source import DBGEN_BUILD_COMMAND, DBGEN_GENERATE_COMMAND, sha256_file
 
 CONVERTER_NAME = "data.tpch"
-CONVERTER_VERSION = "1.0.0"
+CONVERTER_VERSION = "1.0.1"
 TARGET_FILE_SIZE_BYTES = 128 * 1024**2
 ROW_GROUP_ROWS = 64 * 1024
 NOTICE = "Derived from TPC-H DBGEN; this is not an audited TPC-H result."
+SOURCE_TBL_FORMAT = {
+    "encoding": "utf-8",
+    "delimiter": "|",
+    "trailing_delimiter": False,
+    "record_terminator": "LF",
+}
+_GIT_COMMIT = re.compile(r"^[0-9a-f]{40}$")
+_PYTHON_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
 
 class TpchContractError(RuntimeError):
@@ -103,10 +113,10 @@ def parse_tbl_row(table_name: str, raw_line: str, line_number: int) -> dict[str,
     if table_name not in TPCH_SCHEMAS:
         raise TpchContractError(f"unknown TPC-H table: {table_name}")
     line = raw_line.rstrip("\r\n")
-    if not line.endswith("|"):
-        raise TpchContractError(f"{table_name}.tbl:{line_number} has no trailing delimiter")
-    values = line[:-1].split("|")
     schema = TPCH_SCHEMAS[table_name]
+    values = line.split("|")
+    if len(values) != len(schema) and line.endswith("|"):
+        values = line[:-1].split("|")
     if len(values) != len(schema):
         raise TpchContractError(
             f"{table_name}.tbl:{line_number} has {len(values)} columns; expected {len(schema)}"
@@ -431,6 +441,8 @@ def build_dataset_from_tbl(
     *,
     source_provenance: Mapping[str, str],
     generator_git_commit: str,
+    generator_python_version: str | None = None,
+    generator_python_implementation: str | None = None,
     expected_counts: Mapping[str, int] = SF1_ROW_COUNTS,
     benchmark_eligible: bool = True,
     target_file_size_bytes: int = TARGET_FILE_SIZE_BYTES,
@@ -440,8 +452,20 @@ def build_dataset_from_tbl(
 
     if output_dir.exists():
         raise FileExistsError(f"immutable TPC-H output already exists: {output_dir}")
-    if not generator_git_commit or len(generator_git_commit) != 40:
+    if _GIT_COMMIT.fullmatch(generator_git_commit) is None:
         raise ValueError("generator_git_commit must be a full Git object ID")
+    effective_python_version = (
+        platform.python_version() if generator_python_version is None else generator_python_version
+    )
+    effective_python_implementation = (
+        platform.python_implementation()
+        if generator_python_implementation is None
+        else generator_python_implementation
+    )
+    if _PYTHON_VERSION.fullmatch(effective_python_version) is None:
+        raise ValueError("generator_python_version must be an exact MAJOR.MINOR.PATCH version")
+    if effective_python_implementation != "CPython":
+        raise ValueError("generator_python_implementation must be 'CPython'")
     if set(source_provenance) < {
         "name",
         "version",
@@ -494,6 +518,8 @@ def build_dataset_from_tbl(
                 "version": CONVERTER_VERSION,
                 "git_commit": generator_git_commit,
                 "worktree_dirty": False,
+                "python_version": effective_python_version,
+                "python_implementation": effective_python_implementation,
             },
             "source": dict(source_provenance),
             "generation": {
@@ -501,6 +527,7 @@ def build_dataset_from_tbl(
                 "dbgen_command": list(DBGEN_GENERATE_COMMAND),
                 "locale": "C",
                 "timezone": "UTC",
+                "source_tbl_format": dict(SOURCE_TBL_FORMAT),
             },
             "storage": {
                 "profile": "tpch_parquet",
@@ -552,6 +579,7 @@ def validate_tpch_dataset(
     *,
     expected_counts: Mapping[str, int] = SF1_ROW_COUNTS,
     expected_source: Mapping[str, str] | None = None,
+    expected_python_version: str | None = None,
     require_benchmark_eligible: bool = True,
 ) -> ValidationReport:
     manifest_path = dataset_root / "manifest.json"
@@ -571,8 +599,37 @@ def validate_tpch_dataset(
     if require_benchmark_eligible and manifest.get("benchmark_eligible") is not True:
         raise TpchContractError("TPC-H dataset is not benchmark eligible")
     generator = manifest.get("generator")
-    if not isinstance(generator, dict) or generator.get("worktree_dirty") is not False:
+    if (
+        not isinstance(generator, dict)
+        or generator.get("name") != f"tpch-dbgen+{CONVERTER_NAME}"
+        or generator.get("version") != CONVERTER_VERSION
+        or not isinstance(generator.get("git_commit"), str)
+        or _GIT_COMMIT.fullmatch(generator["git_commit"]) is None
+        or generator.get("worktree_dirty") is not False
+        or (
+            require_benchmark_eligible
+            and (
+                not isinstance(generator.get("python_version"), str)
+                or _PYTHON_VERSION.fullmatch(generator["python_version"]) is None
+                or generator.get("python_implementation") != "CPython"
+            )
+        )
+    ):
         raise TpchContractError("TPC-H generator provenance is missing or dirty")
+    if (
+        expected_python_version is not None
+        and generator.get("python_version") != expected_python_version
+    ):
+        raise TpchContractError("TPC-H generator Python differs from runtime lock")
+    expected_generation = {
+        "build_command": list(DBGEN_BUILD_COMMAND),
+        "dbgen_command": list(DBGEN_GENERATE_COMMAND),
+        "locale": "C",
+        "timezone": "UTC",
+        "source_tbl_format": dict(SOURCE_TBL_FORMAT),
+    }
+    if manifest.get("generation") != expected_generation:
+        raise TpchContractError("TPC-H generation metadata is not the reviewed contract")
     source = manifest.get("source")
     if not isinstance(source, dict):
         raise TpchContractError("TPC-H source provenance is missing")

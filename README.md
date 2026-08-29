@@ -122,10 +122,11 @@ Chạy các lệnh sau trong **Ubuntu/WSL**, từ thư mục repository (Docker 
 đã bật WSL Integration cho Ubuntu):
 
 ```bash
-# Khóa môi trường Python và sinh credentials cục bộ trong .env
+# .python-version và runtime lock yêu cầu đúng CPython 3.12.13.
+# Trỏ uv tới binary 3.12.13 đã cài cục bộ, rồi sinh credentials trong .env.
 python -m pip install uv==0.8.15
 python scripts/bootstrap_env.py
-uv sync --all-extras --frozen
+uv sync --all-extras --frozen --python /absolute/path/to/python3.12
 
 # Gate không cần Docker: lint, unit tests, fixture và dry-run manifest smoke
 make lint test plan compose-config
@@ -164,18 +165,22 @@ runtime, input, dữ liệu, kết quả hoặc physical-plan semantics bị dri
 `benchmark-laptop` dùng 2 CPU và giới hạn worker/client 5 GiB, lịch paired randomized AB/BA,
 warm-up tách khỏi measurement, timeout/resume bất biến, event-log attribution theo `jobGroupId`,
 resource sampling đúng cửa sổ terminal action và bootstrap CI 95%. Cả hai generator chính đều
-fail-closed nếu worktree chưa sạch/commit; TPC-H SF1 còn khóa source archive, checksum, schema,
-row count, PK/FK, date bounds và nhãn `non-audited`.
+fail-closed nếu worktree chưa sạch/commit hoặc active interpreter không phải đúng CPython 3.12.13;
+TPC-H SF1 còn khóa source archive, checksum, schema, row count, PK/FK, date bounds và nhãn
+`non-audited`.
 
 ## Trạng thái hiện tại
 
 Control plane và toàn bộ core workload đã được triển khai, nhưng **nghiên cứu chưa hoàn tất** vì
-chưa sinh hai dataset primary và chưa chạy 10 campaign SF1 để tạo `results/raw`/báo cáo. Gate cục
-bộ mới nhất có 186 test pass, Ruff/mypy pass và Compose config hợp lệ. Native smoke gần nhất ngày
-27/08/2026 đã pass toàn bộ correctness/snapshot/native-plan gate tại
-`.artifacts/smoke/smoke-20260827T072326Z-1701/verification.json`; đó vẫn chỉ là readiness evidence,
-không phải benchmark được công bố. Image sau phần tích hợp TPC-H ngày 28/08 chưa thể smoke lại do
-Docker Desktop 4.86 trên máy này crash bởi stale AF_UNIX runtime socket.
+hai primary dataset và 10 campaign chưa hoàn tất. E-commerce
+`ecommerce-small-uniform-seed-20260827-v1` đã content-validate từ clean commit
+`80dd6676627e0cb100538be196bb0aab125d616f` (10.110.000 dòng, 22 Parquet, 241.936.114 byte), nhưng
+chỉ còn là diagnostic artifact: manifest cũ không ghi Python provenance và được sinh bằng Python
+3.12.11, khác runtime lock 3.12.13. Sáu config E-commerce hiện trỏ tới primary revision `v2`, chưa
+được materialize. Gate code mới nhất có 238 test pass, Ruff/format/mypy và Compose config pass;
+Spark analyzer thật xác nhận schema Q01/Q03/Q06/Q12. Native smoke ngày 28/08/2026 pass toàn bộ 21
+gate tại `.artifacts/smoke/smoke-20260828T141856Z-3279/verification.json`; đó vẫn là readiness
+evidence, không phải benchmark để công bố.
 
 Các phiên bản, Maven coordinates, OCI digests và source checksums nằm trong
 [`runtime-versions.lock`](runtime-versions.lock). Trạng thái phạm vi đã triển khai và các phần còn

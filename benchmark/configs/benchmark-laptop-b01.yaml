@@ -19,7 +19,7 @@ workload:
   query_id: B01
   storage_profile: ecommerce_iceberg_rest
   data_path: lakehouse.bronze.orders
-  dataset_manifest: data/generated/ecommerce-small-uniform-seed-20260827-v1/manifest.json
+  dataset_manifest: data/generated/ecommerce-small-uniform-seed-20260827-v2/manifest.json
   sql_file: workloads/business/B01_daily_regional_revenue.sql
   manifest_file: workloads/manifests/business/B01_daily_regional_revenue.yaml
   result_mode: collect

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -32,6 +33,8 @@ from data.generator.constants import (
 from data.generator.manifest import TableAudit
 from data.generator.profiles import GeneratorProfile, profile_from_mapping
 from data.generator.schemas import PRIMARY_KEYS, TABLE_SCHEMAS, schema_sha256
+
+_PYTHON_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
 
 class DatasetValidationError(ValueError):
@@ -105,7 +108,11 @@ def _profile_from_manifest(
 
 
 def _validate_manifest_header(
-    manifest: dict[str, Any], profile: GeneratorProfile | None, issues: list[str]
+    manifest: dict[str, Any],
+    profile: GeneratorProfile | None,
+    issues: list[str],
+    *,
+    expected_python_version: str | None,
 ) -> None:
     if manifest.get("schema_version") != DATASET_SCHEMA_VERSION:
         issues.append(f"manifest.schema_version must be {DATASET_SCHEMA_VERSION}")
@@ -121,6 +128,36 @@ def _validate_manifest_header(
             issues.append("manifest.generator.git_commit must be a non-empty string")
         if not isinstance(generator.get("worktree_dirty"), bool):
             issues.append("manifest.generator.worktree_dirty must be a boolean")
+        if (
+            manifest.get("benchmark_eligible") is True
+            and generator.get("worktree_dirty") is not False
+        ):
+            issues.append(
+                "benchmark-eligible data requires manifest.generator.worktree_dirty=false"
+            )
+        python_version = generator.get("python_version")
+        python_implementation = generator.get("python_implementation")
+        if profile is not None and profile.benchmark_eligible:
+            if (
+                not isinstance(python_version, str)
+                or _PYTHON_VERSION.fullmatch(python_version) is None
+            ):
+                issues.append("benchmark-eligible data requires manifest.generator.python_version")
+            if python_implementation != "CPython":
+                issues.append(
+                    "benchmark-eligible data requires manifest.generator.python_implementation="
+                    "'CPython'"
+                )
+        if (
+            expected_python_version is not None
+            and profile is not None
+            and profile.benchmark_eligible
+            and python_version != expected_python_version
+        ):
+            issues.append(
+                "manifest.generator.python_version does not match the locked Python runtime "
+                f"({expected_python_version!r})"
+            )
 
     expected_hash_contract = {
         "algorithm": CONTENT_HASH_ALGORITHM,
@@ -262,6 +299,7 @@ def validate_dataset(
     dataset_dir: str | Path,
     *,
     expected_profile: GeneratorProfile | None = None,
+    expected_python_version: str | None = None,
 ) -> ValidationReport:
     """Validate manifest identity, physical files, schemas, and relational gates."""
 
@@ -269,7 +307,12 @@ def validate_dataset(
     manifest_path, manifest = _load_manifest(root)
     issues: list[str] = []
     profile = _profile_from_manifest(manifest, expected_profile, issues)
-    _validate_manifest_header(manifest, profile, issues)
+    _validate_manifest_header(
+        manifest,
+        profile,
+        issues,
+        expected_python_version=expected_python_version,
+    )
     raw_tables = manifest.get("tables")
     if not isinstance(raw_tables, dict) or set(raw_tables) != set(TABLE_ORDER):
         issues.append("manifest.tables must contain exactly the five E-commerce tables")

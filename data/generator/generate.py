@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -31,6 +33,7 @@ from data.generator.rows import iter_table_rows
 from data.generator.schemas import PRIMARY_KEYS, TABLE_SCHEMAS, schema_sha256
 
 _WRITE_BATCH_ROWS = 16_384
+_PYTHON_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +185,8 @@ def _build_manifest(
     *,
     generator_git_commit: str,
     generator_worktree_dirty: bool,
+    generator_python_version: str,
+    generator_python_implementation: str,
 ) -> dict[str, Any]:
     normalized_profile = profile.as_canonical_mapping()
     return {
@@ -192,6 +197,8 @@ def _build_manifest(
             "version": GENERATOR_VERSION,
             "git_commit": generator_git_commit,
             "worktree_dirty": generator_worktree_dirty,
+            "python_version": generator_python_version,
+            "python_implementation": generator_python_implementation,
         },
         "seed": profile.seed,
         "scale_profile": profile.profile_id,
@@ -222,6 +229,8 @@ def generate_dataset(
     *,
     generator_git_commit: str | None = None,
     generator_worktree_dirty: bool | None = None,
+    generator_python_version: str | None = None,
+    generator_python_implementation: str | None = None,
 ) -> GenerationResult:
     """Generate a new immutable dataset directory.
 
@@ -233,8 +242,6 @@ def generate_dataset(
     output_path = Path(output_dir).expanduser().resolve(strict=False)
     if output_path.exists():
         raise FileExistsError(f"immutable dataset output already exists: {output_path}")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
     discovered_commit, discovered_dirty = _discover_git_provenance()
     effective_commit = generator_git_commit or discovered_commit
     effective_dirty = (
@@ -242,6 +249,22 @@ def generate_dataset(
     )
     if not effective_commit.strip():
         raise ValueError("generator_git_commit cannot be empty")
+    if profile.benchmark_eligible and effective_dirty:
+        raise ValueError("benchmark-eligible data requires a clean generator worktree")
+    effective_python_version = (
+        platform.python_version() if generator_python_version is None else generator_python_version
+    )
+    effective_python_implementation = (
+        platform.python_implementation()
+        if generator_python_implementation is None
+        else generator_python_implementation
+    )
+    if _PYTHON_VERSION.fullmatch(effective_python_version) is None:
+        raise ValueError("generator_python_version must be an exact MAJOR.MINOR.PATCH version")
+    if effective_python_implementation != "CPython":
+        raise ValueError("generator_python_implementation must be 'CPython'")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     temporary_path = Path(
         tempfile.mkdtemp(prefix=f".{output_path.name}.tmp-", dir=output_path.parent)
@@ -256,6 +279,8 @@ def generate_dataset(
             tables,
             generator_git_commit=effective_commit,
             generator_worktree_dirty=effective_dirty,
+            generator_python_version=effective_python_version,
+            generator_python_implementation=effective_python_implementation,
         )
         temporary_manifest = temporary_path / "manifest.json"
         temporary_manifest.write_text(

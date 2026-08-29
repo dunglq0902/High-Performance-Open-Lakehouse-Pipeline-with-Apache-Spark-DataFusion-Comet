@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import platform
 from pathlib import Path
 
 import pyarrow as pa
@@ -39,6 +40,8 @@ def test_integrity_validator_accepts_all_five_tables(tmp_path: Path) -> None:
     report = validate_dataset(dataset_dir, expected_profile=profile)
 
     assert report.dataset_id == profile.dataset_id
+    assert manifest["generator"]["python_version"] == platform.python_version()  # type: ignore[index]
+    assert manifest["generator"]["python_implementation"] == "CPython"  # type: ignore[index]
     assert report.table_row_counts == dict(profile.counts)
     assert set(report.table_content_sha256) == set(TABLE_ORDER)
     for table_name in TABLE_ORDER:
@@ -105,4 +108,21 @@ def test_validator_detects_unlisted_parquet_file(tmp_path: Path) -> None:
     unlisted.write_bytes(source.read_bytes())
 
     with pytest.raises(DatasetValidationError, match="file inventory mismatch"):
+        validate_dataset(dataset_dir)
+
+
+def test_validator_rejects_dirty_benchmark_generator_provenance(tmp_path: Path) -> None:
+    dataset_dir, manifest = _generated_fixture(tmp_path)
+    manifest["benchmark_eligible"] = True
+    manifest["generator"]["worktree_dirty"] = True  # type: ignore[index]
+    (dataset_dir / "manifest.json").write_text(
+        json.dumps(manifest, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    with pytest.raises(
+        DatasetValidationError,
+        match=r"benchmark-eligible data requires manifest\.generator\.worktree_dirty=false",
+    ):
         validate_dataset(dataset_dir)

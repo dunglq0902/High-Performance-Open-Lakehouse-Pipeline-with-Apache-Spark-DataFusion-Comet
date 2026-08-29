@@ -14,6 +14,7 @@ from data.generator.constants import TABLE_ORDER
 
 _PROFILE_KEYS = {
     "schema_version",
+    "dataset_revision",
     "profile_id",
     "seed",
     "benchmark_eligible",
@@ -26,6 +27,7 @@ _PROFILE_KEYS = {
     "counts",
     "rows_per_file",
 }
+_REQUIRED_PROFILE_KEYS = _PROFILE_KEYS - {"dataset_revision"}
 
 _BENCHMARK_MINIMUM_COUNTS = {
     "customers": 100_000,
@@ -70,6 +72,7 @@ class GeneratorProfile:
     """Fully validated, immutable generator configuration."""
 
     schema_version: int
+    dataset_revision: int
     profile_id: str
     seed: int
     benchmark_eligible: bool
@@ -86,13 +89,13 @@ class GeneratorProfile:
     def dataset_id(self) -> str:
         return (
             f"ecommerce-{self.profile_id}-{self.skew_profile}-seed-"
-            f"{self.seed}-v{self.schema_version}"
+            f"{self.seed}-v{self.dataset_revision}"
         )
 
     def as_canonical_mapping(self) -> dict[str, Any]:
         """Return the normalized mapping whose hash identifies this config."""
 
-        return {
+        result: dict[str, Any] = {
             "schema_version": self.schema_version,
             "profile_id": self.profile_id,
             "seed": self.seed,
@@ -106,6 +109,9 @@ class GeneratorProfile:
             "counts": dict(sorted(self.counts.items())),
             "rows_per_file": dict(sorted(self.rows_per_file.items())),
         }
+        if self.dataset_revision != 1:
+            result["dataset_revision"] = self.dataset_revision
+        return result
 
 
 def _format_utc(value: datetime) -> str:
@@ -146,7 +152,7 @@ def profile_from_mapping(value: Mapping[str, object]) -> GeneratorProfile:
     """Validate a decoded YAML mapping without accepting undeclared fields."""
 
     unknown = set(value) - _PROFILE_KEYS
-    missing = _PROFILE_KEYS - set(value)
+    missing = _REQUIRED_PROFILE_KEYS - set(value)
     if unknown or missing:
         raise ValueError(
             f"generator profile fields mismatch; missing={sorted(missing)}, "
@@ -154,6 +160,7 @@ def profile_from_mapping(value: Mapping[str, object]) -> GeneratorProfile:
         )
 
     schema_version = value["schema_version"]
+    dataset_revision = value.get("dataset_revision", 1)
     seed = value["seed"]
     benchmark_eligible = value["benchmark_eligible"]
     if (
@@ -162,6 +169,12 @@ def profile_from_mapping(value: Mapping[str, object]) -> GeneratorProfile:
         or schema_version != 1
     ):
         raise ValueError("only generator profile schema_version 1 is supported")
+    if (
+        isinstance(dataset_revision, bool)
+        or not isinstance(dataset_revision, int)
+        or dataset_revision < 1
+    ):
+        raise ValueError("dataset_revision must be a positive integer")
     if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
         raise ValueError("seed must be a non-negative integer")
     if not isinstance(benchmark_eligible, bool):
@@ -219,6 +232,7 @@ def profile_from_mapping(value: Mapping[str, object]) -> GeneratorProfile:
 
     return GeneratorProfile(
         schema_version=schema_version,
+        dataset_revision=dataset_revision,
         profile_id=profile_id,
         seed=seed,
         benchmark_eligible=benchmark_eligible,
