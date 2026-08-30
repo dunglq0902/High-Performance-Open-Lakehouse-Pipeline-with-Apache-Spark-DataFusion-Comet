@@ -7,14 +7,17 @@ import tarfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+import pyarrow.parquet as pq  # type: ignore[import-untyped]
 import pytest
 
 from data.tpch.contract import SF1_ROW_COUNTS, TABLE_ORDER, TPCH_SCHEMAS
 from data.tpch.dataset import (
     CONVERTER_VERSION,
     NOTICE,
+    SOURCE_ROW_NORMALIZATION,
     SOURCE_TBL_FORMAT,
     TpchContractError,
+    _convert_table,
     _manifest_hash,
     build_dataset_from_tbl,
     parse_tbl_row,
@@ -23,8 +26,10 @@ from data.tpch.dataset import (
 from data.tpch.source import (
     DBGEN_BUILD_COMMAND,
     DBGEN_GENERATE_COMMAND,
+    DBGEN_SF1_TIMEOUT_SECONDS,
     SourceLock,
     SourceProvenanceError,
+    _run_command,
     load_source_lock,
     materialize_dbgen_tables,
     sha256_file,
@@ -106,6 +111,7 @@ def test_tiny_tpch_conversion_is_atomic_hash_bound_and_revalidates(tmp_path: Pat
     assert result.manifest["generator"]["python_implementation"] == "CPython"
     assert result.manifest["generator"]["python_version"] == "3.12.13"
     assert result.manifest["generation"]["source_tbl_format"] == SOURCE_TBL_FORMAT
+    assert result.manifest["generation"]["source_row_normalization"] == SOURCE_ROW_NORMALIZATION
     assert report.row_counts == expected_counts
     assert report.foreign_key_checks == 10
     assert report.date_bounds["lineitem"]["l_receiptdate"] == ["1994-01-04", "1994-01-04"]
@@ -121,6 +127,20 @@ def test_tiny_tpch_conversion_is_atomic_hash_bound_and_revalidates(tmp_path: Pat
     original_manifest = manifest_path.read_text(encoding="utf-8")
     tampered_manifest = json.loads(original_manifest)
     tampered_manifest["generation"]["source_tbl_format"]["trailing_delimiter"] = True
+    tampered_manifest["manifest_sha256"] = _manifest_hash(tampered_manifest)
+    manifest_path.write_text(
+        json.dumps(tampered_manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    with pytest.raises(TpchContractError, match="generation metadata"):
+        validate_tpch_dataset(output, expected_counts=expected_counts, expected_source=SOURCE)
+    manifest_path.write_text(original_manifest, encoding="utf-8", newline="")
+
+    tampered_manifest = json.loads(original_manifest)
+    tampered_manifest["generation"]["source_row_normalization"]["partsupp"]["algorithm"] = (
+        "unrecorded-sort"
+    )
     tampered_manifest["manifest_sha256"] = _manifest_hash(tampered_manifest)
     manifest_path.write_text(
         json.dumps(tampered_manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
@@ -161,6 +181,71 @@ def test_tbl_parser_accepts_locked_and_official_rows_with_exact_column_count() -
         parse_tbl_row("region", "0|AFRICA|comment|extra", 4)
     with pytest.raises(TpchContractError, match="has 4 columns; expected 3"):
         parse_tbl_row("region", "0|AFRICA|comment||", 5)
+
+
+def _write_partsupp_rows(path: Path, keys: Sequence[tuple[int, int]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "".join(
+            f"{partkey}|{suppkey}|100|12.34|official dbgen order|\n" for partkey, suppkey in keys
+        ),
+        encoding="utf-8",
+        newline="",
+    )
+
+
+def test_partsupp_official_group_order_is_normalized_in_parquet(tmp_path: Path) -> None:
+    source_keys = [
+        (2500, 7501),
+        (2500, 1),
+        (2500, 5001),
+        (2500, 2501),
+        (2501, 7502),
+        (2501, 2),
+        (2501, 5002),
+        (2501, 2502),
+    ]
+    raw_path = tmp_path / "raw" / "partsupp.tbl"
+    _write_partsupp_rows(raw_path, source_keys)
+
+    record = _convert_table(
+        tmp_path,
+        raw_path,
+        "partsupp",
+        len(source_keys),
+        target_file_size_bytes=1_024 * 1_024,
+        row_group_rows=2,
+    )
+    parquet_keys: list[tuple[int, int]] = []
+    for file_record in record["files"]:
+        table = pq.read_table(
+            tmp_path / str(file_record["path"]),
+            columns=["ps_partkey", "ps_suppkey"],
+        )
+        parquet_keys.extend(
+            zip(
+                table.column("ps_partkey").to_pylist(),
+                table.column("ps_suppkey").to_pylist(),
+                strict=True,
+            )
+        )
+
+    assert parquet_keys == sorted(source_keys)
+
+
+def test_partsupp_normalization_still_rejects_duplicate_primary_keys(tmp_path: Path) -> None:
+    raw_path = tmp_path / "raw" / "partsupp.tbl"
+    _write_partsupp_rows(raw_path, [(2500, 7501), (2500, 1), (2500, 7501)])
+
+    with pytest.raises(TpchContractError, match="primary key is duplicate or not ordered"):
+        _convert_table(
+            tmp_path,
+            raw_path,
+            "partsupp",
+            3,
+            target_file_size_bytes=1_024 * 1_024,
+            row_group_rows=2,
+        )
 
 
 def _synthetic_source_archive(tmp_path: Path) -> tuple[Path, SourceLock]:
@@ -224,6 +309,22 @@ def test_synthetic_archive_materializes_with_locked_commands(tmp_path: Path) -> 
     assert parse_tbl_row("region", (output / "region.tbl").read_text().rstrip("\n"), 1)
 
 
+def test_dbgen_command_uses_bounded_sf1_timeout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    observed: dict[str, object] = {}
+
+    def run_stub(*_args: object, **kwargs: object) -> None:
+        observed.update(kwargs)
+
+    monkeypatch.setattr(subprocess, "run", run_stub)
+
+    _run_command(DBGEN_GENERATE_COMMAND, tmp_path, {"LC_ALL": "C"})
+
+    assert DBGEN_SF1_TIMEOUT_SECONDS == 14_400
+    assert observed["timeout"] == DBGEN_SF1_TIMEOUT_SECONDS
+
+
 def test_materialization_wraps_command_output_and_cleans_partial_raw(tmp_path: Path) -> None:
     archive, source_lock = _synthetic_source_archive(tmp_path)
 
@@ -258,6 +359,43 @@ def test_materialization_wraps_command_output_and_cleans_partial_raw(tmp_path: P
     assert "./dbgen" in message
     assert "generated stdout" in message
     assert "generated stderr" in message
+    assert not output.exists()
+
+
+def test_materialization_wraps_timeout_and_cleans_partial_raw(tmp_path: Path) -> None:
+    archive, source_lock = _synthetic_source_archive(tmp_path)
+
+    def downloader(_url: str, destination: Path) -> None:
+        shutil.copyfile(archive, destination)
+
+    def command_runner(arguments: Sequence[str], cwd: Path, environment: Mapping[str, str]) -> None:
+        command = tuple(arguments)
+        if command == DBGEN_BUILD_COMMAND:
+            (cwd / "dbgen").write_text("synthetic binary", encoding="utf-8")
+            return
+        raw = Path(environment["DSS_PATH"])
+        (raw / "region.tbl").write_text("partial output", encoding="utf-8")
+        raise subprocess.TimeoutExpired(
+            list(command),
+            DBGEN_SF1_TIMEOUT_SECONDS,
+            output=b"partial stdout",
+            stderr=b"generation deadline reached",
+        )
+
+    output = tmp_path / "raw"
+    with pytest.raises(SourceProvenanceError) as failure:
+        materialize_dbgen_tables(
+            source_lock,
+            tmp_path / "cache",
+            output,
+            downloader=downloader,
+            command_runner=command_runner,
+        )
+
+    message = str(failure.value)
+    assert "./dbgen" in message
+    assert "partial stdout" in message
+    assert "generation deadline reached" in message
     assert not output.exists()
 
 

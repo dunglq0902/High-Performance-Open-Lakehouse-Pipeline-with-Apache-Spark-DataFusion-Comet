@@ -32,6 +32,7 @@ DBGEN_BUILD_COMMAND = (
     "dbgen",
 )
 DBGEN_GENERATE_COMMAND = ("./dbgen", "-f", "-s", "1")
+DBGEN_SF1_TIMEOUT_SECONDS = 4 * 60 * 60
 
 type Downloader = Callable[[str, Path], None]
 type CommandRunner = Callable[[Sequence[str], Path, Mapping[str, str]], None]
@@ -194,7 +195,7 @@ def _run_command(arguments: Sequence[str], cwd: Path, environment: Mapping[str, 
         check=True,
         capture_output=True,
         text=True,
-        timeout=1800,
+        timeout=DBGEN_SF1_TIMEOUT_SECONDS,
     )
 
 

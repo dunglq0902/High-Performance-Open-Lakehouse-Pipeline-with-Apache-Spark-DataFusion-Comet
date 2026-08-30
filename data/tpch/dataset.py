@@ -11,6 +11,7 @@ import shutil
 import struct
 import tempfile
 from collections.abc import Iterator, Mapping
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -33,7 +34,7 @@ from data.tpch.contract import (
 from data.tpch.source import DBGEN_BUILD_COMMAND, DBGEN_GENERATE_COMMAND, sha256_file
 
 CONVERTER_NAME = "data.tpch"
-CONVERTER_VERSION = "1.0.1"
+CONVERTER_VERSION = "1.0.2"
 TARGET_FILE_SIZE_BYTES = 128 * 1024**2
 ROW_GROUP_ROWS = 64 * 1024
 NOTICE = "Derived from TPC-H DBGEN; this is not an audited TPC-H result."
@@ -42,6 +43,14 @@ SOURCE_TBL_FORMAT = {
     "delimiter": "|",
     "trailing_delimiter": False,
     "record_terminator": "LF",
+}
+SOURCE_ROW_NORMALIZATION = {
+    "partsupp": {
+        "algorithm": "contiguous-primary-key-prefix-sort-v1",
+        "input_grouping_key": ["ps_partkey"],
+        "output_ordering_key": ["ps_partkey", "ps_suppkey"],
+        "requires_strictly_increasing_groups": True,
+    }
 }
 _GIT_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _PYTHON_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
@@ -133,6 +142,53 @@ def iter_tbl_rows(path: Path, table_name: str) -> Iterator[dict[str, object]]:
             if not raw_line:
                 continue
             yield parse_tbl_row(table_name, raw_line, line_number)
+
+
+def _partsupp_primary_key(row: Mapping[str, object]) -> tuple[int, int]:
+    partkey = row["ps_partkey"]
+    suppkey = row["ps_suppkey"]
+    if (
+        not isinstance(partkey, int)
+        or isinstance(partkey, bool)
+        or not isinstance(suppkey, int)
+        or isinstance(suppkey, bool)
+    ):
+        raise TpchContractError("partsupp normalization key is not integral")
+    return partkey, suppkey
+
+
+def iter_normalized_tbl_rows(path: Path, table_name: str) -> Iterator[dict[str, object]]:
+    """Yield source rows in the converter's provenance-recorded canonical order."""
+
+    rows = iter_tbl_rows(path, table_name)
+    if table_name != "partsupp":
+        yield from rows
+        return
+
+    current_partkey: int | None = None
+    current_group: list[dict[str, object]] = []
+    for row in rows:
+        partkey = _partsupp_primary_key(row)[0]
+        if current_partkey is None:
+            current_partkey = partkey
+        elif partkey != current_partkey:
+            if partkey <= current_partkey:
+                raise TpchContractError(
+                    "partsupp normalization groups are duplicate or not ordered: "
+                    f"{partkey} after {current_partkey}"
+                )
+            yield from sorted(
+                current_group,
+                key=_partsupp_primary_key,
+            )
+            current_group = []
+            current_partkey = partkey
+        current_group.append(row)
+
+    yield from sorted(
+        current_group,
+        key=_partsupp_primary_key,
+    )
 
 
 def _encode_scalar(field: pa.Field, value: object) -> bytes:
@@ -281,7 +337,7 @@ def _convert_table(
             close_writer()
 
     try:
-        for row in iter_tbl_rows(raw_path, table_name):
+        for row in iter_normalized_tbl_rows(raw_path, table_name):
             audit.add(row)
             pending.append(row)
             if len(pending) == row_group_rows:
@@ -528,6 +584,7 @@ def build_dataset_from_tbl(
                 "locale": "C",
                 "timezone": "UTC",
                 "source_tbl_format": dict(SOURCE_TBL_FORMAT),
+                "source_row_normalization": deepcopy(SOURCE_ROW_NORMALIZATION),
             },
             "storage": {
                 "profile": "tpch_parquet",
@@ -627,6 +684,7 @@ def validate_tpch_dataset(
         "locale": "C",
         "timezone": "UTC",
         "source_tbl_format": dict(SOURCE_TBL_FORMAT),
+        "source_row_normalization": SOURCE_ROW_NORMALIZATION,
     }
     if manifest.get("generation") != expected_generation:
         raise TpchContractError("TPC-H generation metadata is not the reviewed contract")
