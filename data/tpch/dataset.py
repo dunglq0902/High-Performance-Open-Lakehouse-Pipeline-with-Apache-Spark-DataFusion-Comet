@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import pyarrow as pa  # type: ignore[import-untyped]
+import pyarrow.compute as pc  # type: ignore[import-untyped]
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
 
 from data.tpch.contract import (
@@ -380,9 +381,93 @@ def _convert_table(
     }
 
 
-def _batch_rows(batch: pa.RecordBatch, columns: tuple[str, ...]) -> Iterator[tuple[object, ...]]:
-    values = [batch.column(batch.schema.get_field_index(column)).to_pylist() for column in columns]
-    yield from zip(*values, strict=True)
+def _batch_column(batch: pa.RecordBatch, column: str) -> pa.Array:
+    return batch.column(batch.schema.get_field_index(column))
+
+
+def _compute_any(values: pa.Array) -> bool:
+    result = pc.any(values).as_py()
+    return bool(result)
+
+
+def _key_at(
+    columns: Mapping[str, pa.Array], names: tuple[str, ...], index: int
+) -> tuple[object, ...]:
+    return tuple(columns[name][index].as_py() for name in names)
+
+
+def _validate_primary_key_batch(
+    table_name: str,
+    columns: Mapping[str, pa.Array],
+    previous_key: tuple[object, ...] | None,
+) -> tuple[object, ...]:
+    """Validate one ordered primary-key batch with Arrow-native comparisons."""
+
+    names = PRIMARY_KEYS[table_name]
+    row_count = len(columns[names[0]])
+    if row_count == 0:
+        if previous_key is None:
+            raise TpchContractError(f"{table_name} has an empty primary-key batch")
+        return previous_key
+    for name in names:
+        values = columns[name]
+        if values.null_count:
+            raise TpchContractError(f"{table_name} primary key contains a null value")
+        if _compute_any(pc.less(values, 0)):
+            raise TpchContractError(f"{table_name} primary key contains a negative value")
+
+    first_key = _key_at(columns, names, 0)
+    if previous_key is not None and first_key <= previous_key:
+        raise TpchContractError(
+            f"{table_name} primary key is duplicate or not ordered: {first_key}"
+        )
+    if row_count > 1:
+        # A tuple is strictly increasing when the first unequal component is
+        # greater. Keeping this expression in Arrow avoids materializing millions
+        # of Python integers and tuples during SF1 validation.
+        seed = columns[names[0]].slice(1)
+        equal_prefix = pc.equal(seed, seed)
+        greater = pc.invert(equal_prefix)
+        for name in names:
+            values = columns[name]
+            current = values.slice(1)
+            prior = values.slice(0, row_count - 1)
+            greater = pc.or_(greater, pc.and_(equal_prefix, pc.greater(current, prior)))
+            equal_prefix = pc.and_(equal_prefix, pc.equal(current, prior))
+        invalid = pc.invert(greater)
+        if _compute_any(invalid):
+            invalid_indexes = pc.indices_nonzero(invalid)
+            index = int(invalid_indexes[0].as_py()) + 1
+            key = _key_at(columns, names, index)
+            raise TpchContractError(f"{table_name} primary key is duplicate or not ordered: {key}")
+    return _key_at(columns, names, row_count - 1)
+
+
+def _arrow_table(columns: Mapping[str, list[pa.Array]], names: tuple[str, ...]) -> pa.Table:
+    return pa.table({name: pa.chunked_array(columns[name]) for name in names})
+
+
+def _validate_foreign_keys(
+    table_name: str,
+    child_columns: Mapping[str, list[pa.Array]],
+    parent_keys: Mapping[str, pa.Table],
+) -> None:
+    """Check all child keys with one native hash anti-join per constraint."""
+
+    for foreign_key in FOREIGN_KEYS[table_name]:
+        child = _arrow_table(child_columns, foreign_key.columns)
+        parent = parent_keys[foreign_key.parent_table]
+        orphans = child.join(
+            parent,
+            keys=list(foreign_key.columns),
+            right_keys=list(foreign_key.parent_columns),
+            join_type="left anti",
+        )
+        if orphans.num_rows:
+            orphan = tuple(orphans[column][0].as_py() for column in foreign_key.columns)
+            raise TpchContractError(
+                f"{table_name} foreign key {foreign_key.columns} is orphan: {orphan}"
+            )
 
 
 def _validate_parquet_tables(
@@ -391,7 +476,7 @@ def _validate_parquet_tables(
 ) -> ValidationReport:
     if set(expected_counts) != set(TABLE_ORDER):
         raise TpchContractError("expected row counts must cover all eight TPC-H tables")
-    parent_keys: dict[str, set[tuple[object, ...]]] = {}
+    parent_keys: dict[str, pa.Table] = {}
     row_counts: dict[str, int] = {}
     all_date_bounds: dict[str, dict[str, list[str]]] = {}
     foreign_key_checks = 0
@@ -407,16 +492,27 @@ def _validate_parquet_tables(
             raise TpchContractError(f"{table_name} has no Parquet files")
         schema = TPCH_SCHEMAS[table_name]
         previous_key: tuple[object, ...] | None = None
-        keys: set[tuple[object, ...]] = set()
         count = 0
         date_minimum: dict[str, date] = {}
         date_maximum: dict[str, date] = {}
+        primary_key_chunks: dict[str, list[pa.Array]] = {
+            column: [] for column in PRIMARY_KEYS[table_name]
+        }
+        foreign_key_columns = tuple(
+            dict.fromkeys(
+                column for foreign_key in FOREIGN_KEYS[table_name] for column in foreign_key.columns
+            )
+        )
+        foreign_key_chunks: dict[str, list[pa.Array]] = {
+            column: [] for column in foreign_key_columns
+        }
+        date_fields = tuple(field for field in schema if pa.types.is_date32(field.type))
         required_columns = tuple(
             dict.fromkeys(
                 (
                     *PRIMARY_KEYS[table_name],
-                    *(column for key in FOREIGN_KEYS[table_name] for column in key.columns),
-                    *(field.name for field in schema if pa.types.is_date32(field.type)),
+                    *foreign_key_columns,
+                    *(field.name for field in date_fields),
                 )
             )
         )
@@ -428,53 +524,42 @@ def _validate_parquet_tables(
             for batch in parquet.iter_batches(
                 columns=list(required_columns), batch_size=ROW_GROUP_ROWS
             ):
-                batch_columns = {
-                    name: batch.column(batch.schema.get_field_index(name)).to_pylist()
-                    for name in required_columns
-                }
-                for row_index in range(batch.num_rows):
-                    primary_key = tuple(
-                        batch_columns[column][row_index] for column in PRIMARY_KEYS[table_name]
-                    )
-                    if previous_key is not None and primary_key <= previous_key:
+                batch_columns = {name: _batch_column(batch, name) for name in required_columns}
+                previous_key = _validate_primary_key_batch(table_name, batch_columns, previous_key)
+                if table_name in referenced_parents:
+                    for column in PRIMARY_KEYS[table_name]:
+                        primary_key_chunks[column].append(batch_columns[column])
+                for column in foreign_key_columns:
+                    values = batch_columns[column]
+                    if values.null_count:
                         raise TpchContractError(
-                            f"{table_name} primary key is duplicate or not ordered: {primary_key}"
+                            f"{table_name} foreign key column {column} contains a null value"
                         )
-                    previous_key = primary_key
-                    if table_name in referenced_parents:
-                        keys.add(primary_key)
-                    for foreign_key in FOREIGN_KEYS[table_name]:
-                        local_key = tuple(
-                            batch_columns[column][row_index] for column in foreign_key.columns
+                    foreign_key_chunks[column].append(values)
+                for field in date_fields:
+                    values = batch_columns[field.name]
+                    if values.null_count:
+                        raise TpchContractError(f"{table_name}.{field.name} is not a date")
+                    lower, upper = DATE_RANGES[(table_name, field.name)]
+                    outside = pc.or_(pc.less(values, lower), pc.greater(values, upper))
+                    if _compute_any(outside):
+                        invalid_indexes = pc.indices_nonzero(outside)
+                        index = int(invalid_indexes[0].as_py())
+                        value = values[index].as_py()
+                        raise TpchContractError(
+                            f"{table_name}.{field.name} is outside [{lower}, {upper}]: {value}"
                         )
-                        if local_key not in parent_keys[foreign_key.parent_table]:
-                            raise TpchContractError(
-                                f"{table_name} foreign key {foreign_key.columns} is orphan: "
-                                f"{local_key}"
-                            )
-                        foreign_key_checks += 1
-                    for field in schema:
-                        if not pa.types.is_date32(field.type):
-                            continue
-                        value = batch_columns[field.name][row_index]
-                        if not isinstance(value, date):
-                            raise TpchContractError(f"{table_name}.{field.name} is not a date")
-                        lower, upper = DATE_RANGES[(table_name, field.name)]
-                        if not lower <= value <= upper:
-                            raise TpchContractError(
-                                f"{table_name}.{field.name} is outside [{lower}, {upper}]: {value}"
-                            )
-                        date_minimum[field.name] = min(date_minimum.get(field.name, value), value)
-                        date_maximum[field.name] = max(date_maximum.get(field.name, value), value)
-                    if table_name == "lineitem":
-                        ship = batch_columns["l_shipdate"][row_index]
-                        receipt = batch_columns["l_receiptdate"][row_index]
-                        if (
-                            not isinstance(ship, date)
-                            or not isinstance(receipt, date)
-                            or ship > receipt
-                        ):
-                            raise TpchContractError("lineitem ship date is after receipt date")
+                    bounds = pc.min_max(values)
+                    minimum = bounds["min"].as_py()
+                    maximum = bounds["max"].as_py()
+                    if not isinstance(minimum, date) or not isinstance(maximum, date):
+                        raise TpchContractError(f"{table_name}.{field.name} is not a date")
+                    date_minimum[field.name] = min(date_minimum.get(field.name, minimum), minimum)
+                    date_maximum[field.name] = max(date_maximum.get(field.name, maximum), maximum)
+                if table_name == "lineitem" and _compute_any(
+                    pc.greater(batch_columns["l_shipdate"], batch_columns["l_receiptdate"])
+                ):
+                    raise TpchContractError("lineitem ship date is after receipt date")
                 count += batch.num_rows
         if count != expected_counts[table_name]:
             raise TpchContractError(
@@ -482,8 +567,10 @@ def _validate_parquet_tables(
                 f"{expected_counts[table_name]}"
             )
         row_counts[table_name] = count
+        _validate_foreign_keys(table_name, foreign_key_chunks, parent_keys)
+        foreign_key_checks += count * len(FOREIGN_KEYS[table_name])
         if table_name in referenced_parents:
-            parent_keys[table_name] = keys
+            parent_keys[table_name] = _arrow_table(primary_key_chunks, PRIMARY_KEYS[table_name])
         all_date_bounds[table_name] = {
             field: [date_minimum[field].isoformat(), date_maximum[field].isoformat()]
             for field in sorted(date_minimum)

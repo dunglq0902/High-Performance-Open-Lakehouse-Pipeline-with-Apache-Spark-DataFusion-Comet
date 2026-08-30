@@ -7,6 +7,7 @@ import tarfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+import pyarrow as pa  # type: ignore[import-untyped]
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
 import pytest
 
@@ -19,6 +20,8 @@ from data.tpch.dataset import (
     TpchContractError,
     _convert_table,
     _manifest_hash,
+    _validate_foreign_keys,
+    _validate_primary_key_batch,
     build_dataset_from_tbl,
     parse_tbl_row,
     validate_tpch_dataset,
@@ -246,6 +249,74 @@ def test_partsupp_normalization_still_rejects_duplicate_primary_keys(tmp_path: P
             target_file_size_bytes=1_024 * 1_024,
             row_group_rows=2,
         )
+
+
+def test_arrow_primary_key_validation_preserves_composite_lexicographic_order() -> None:
+    columns = {
+        "ps_partkey": pa.array([1, 2, 2], type=pa.int64()),
+        "ps_suppkey": pa.array([2, 1, 2], type=pa.int64()),
+    }
+
+    assert _validate_primary_key_batch("partsupp", columns, (1, 1)) == (2, 2)
+
+    unordered = {
+        "ps_partkey": pa.array([1, 1], type=pa.int64()),
+        "ps_suppkey": pa.array([2, 1], type=pa.int64()),
+    }
+    with pytest.raises(TpchContractError, match="primary key is duplicate or not ordered"):
+        _validate_primary_key_batch("partsupp", unordered, None)
+    with pytest.raises(TpchContractError, match="primary key is duplicate or not ordered"):
+        _validate_primary_key_batch("partsupp", columns, (1, 2))
+
+
+def test_arrow_primary_key_validation_rejects_unary_boundary_and_invalid_values() -> None:
+    ordered = {"o_orderkey": pa.array([2, 3], type=pa.int64())}
+    assert _validate_primary_key_batch("orders", ordered, (1,)) == (3,)
+
+    with pytest.raises(TpchContractError, match="primary key is duplicate or not ordered"):
+        _validate_primary_key_batch("orders", ordered, (2,))
+    with pytest.raises(TpchContractError, match="primary key is duplicate or not ordered"):
+        _validate_primary_key_batch(
+            "orders", {"o_orderkey": pa.array([3, 2], type=pa.int64())}, None
+        )
+    with pytest.raises(TpchContractError, match="primary key contains a null value"):
+        _validate_primary_key_batch(
+            "orders", {"o_orderkey": pa.array([1, None], type=pa.int64())}, None
+        )
+    with pytest.raises(TpchContractError, match="primary key contains a negative value"):
+        _validate_primary_key_batch(
+            "orders", {"o_orderkey": pa.array([-1, 1], type=pa.int64())}, None
+        )
+
+
+def test_arrow_foreign_key_validation_rejects_composite_orphan() -> None:
+    parent_keys = {
+        "orders": pa.table({"o_orderkey": pa.array([1], type=pa.int64())}),
+        "part": pa.table({"p_partkey": pa.array([1, 2], type=pa.int64())}),
+        "supplier": pa.table({"s_suppkey": pa.array([10, 20], type=pa.int64())}),
+        "partsupp": pa.table(
+            {
+                "ps_partkey": pa.array([1, 2], type=pa.int64()),
+                "ps_suppkey": pa.array([10, 20], type=pa.int64()),
+            }
+        ),
+    }
+    child_columns = {
+        "l_orderkey": [pa.array([1], type=pa.int64())],
+        "l_partkey": [pa.array([1], type=pa.int64())],
+        "l_suppkey": [pa.array([20], type=pa.int64())],
+    }
+
+    with pytest.raises(TpchContractError, match=r"l_partkey.*l_suppkey.*\(1, 20\)"):
+        _validate_foreign_keys("lineitem", child_columns, parent_keys)
+
+
+def test_arrow_foreign_key_validation_rejects_unary_orphan() -> None:
+    child_columns = {"o_custkey": [pa.array([1, 2], type=pa.int64())]}
+    parent_keys = {"customer": pa.table({"c_custkey": pa.array([1], type=pa.int64())})}
+
+    with pytest.raises(TpchContractError, match=r"o_custkey.*\(2,\)"):
+        _validate_foreign_keys("orders", child_columns, parent_keys)
 
 
 def _synthetic_source_archive(tmp_path: Path) -> tuple[Path, SourceLock]:
