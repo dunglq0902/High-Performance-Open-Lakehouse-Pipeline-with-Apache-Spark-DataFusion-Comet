@@ -14,6 +14,7 @@ import yaml
 from jsonschema import Draft202012Validator
 
 from benchmark.runner.canonical import sha256_file, sha256_value
+from benchmark.runner.dataset_attestation import VerifiedDataset
 from benchmark.runner.schedule import paired_randomized_schedule
 
 ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?}")
@@ -238,6 +239,38 @@ def load_experiment(
     return config
 
 
+def _dataset_validation_binding(
+    verified: VerifiedDataset,
+    *,
+    repository_root: Path,
+    dataset_manifest_path: Path,
+) -> dict[str, str]:
+    root = repository_root.expanduser().resolve()
+    attestation_path = verified.attestation_path.expanduser().resolve()
+    try:
+        attestation_relative = attestation_path.relative_to(root).as_posix()
+    except ValueError as error:
+        raise ConfigurationError("dataset validation attestation leaves repository root") from error
+    if (
+        verified.manifest_path.expanduser().resolve()
+        != dataset_manifest_path.expanduser().resolve()
+    ):
+        raise ConfigurationError("verified dataset does not match the experiment dataset manifest")
+    if verified.manifest_sha256 != sha256_file(dataset_manifest_path):
+        raise ConfigurationError("verified dataset manifest SHA-256 is stale")
+    current_attestation_file_sha256 = sha256_file(attestation_path)
+    if verified.attestation_file_sha256 != current_attestation_file_sha256:
+        raise ConfigurationError("verified dataset attestation file SHA-256 is stale")
+    return {
+        "mode": "content-bound-attestation-v1",
+        "attestation_path": attestation_relative,
+        "attestation_file_sha256": current_attestation_file_sha256,
+        "attestation_payload_sha256": verified.attestation_sha256,
+        "content_identity_sha256": verified.content_identity_sha256,
+        "validator_git_commit": verified.git_commit,
+    }
+
+
 def build_experiment_manifest(
     config: Mapping[str, Any],
     *,
@@ -249,6 +282,7 @@ def build_experiment_manifest(
     uv_lock_path: Path,
     spark_defaults_path: Path,
     comet_profile_path: Path,
+    dataset_validation: VerifiedDataset | None = None,
 ) -> dict[str, Any]:
     """Resolve immutable inputs and produce the campaign control manifest."""
 
@@ -283,5 +317,11 @@ def build_experiment_manifest(
             "dataset_content": "validated",
         },
     }
+    if dataset_validation is not None:
+        manifest["dataset_validation"] = _dataset_validation_binding(
+            dataset_validation,
+            repository_root=runtime_lock_path.parent,
+            dataset_manifest_path=dataset_manifest_path,
+        )
     manifest["manifest_sha256"] = sha256_value(manifest)
     return manifest

@@ -56,10 +56,8 @@ research-data-tpch:
 plan: fixture
 	$(UV) run lakehouse-bench plan --config benchmark/configs/smoke-m02.yaml
 
-research-plan: research-data
-	@for config in $(RESEARCH_CORE_CONFIGS); do \
-		$(UV) run lakehouse-bench plan --config "$$config" || exit $$?; \
-	done
+research-plan:
+	$(UV) run python scripts/run_research_suite.py --prepare-only
 
 compose-config:
 	$(PYTHON) scripts/bootstrap_env.py
@@ -80,11 +78,11 @@ tpch-schema-check: build
 		--entrypoint /opt/spark/bin/spark-submit spark-client \
 		--master local[1] /opt/lakehouse/scripts/validate_tpch_schemas_spark.py
 
-benchmark: setup lint test research-data compose-config
+benchmark: setup lint test compose-config
 	$(UV) run python scripts/run_research_suite.py
 
 benchmark-one: setup lint test research-data compose-config
-	$(UV) run python scripts/run_research_campaign.py \
+	$(UV) run python scripts/run_research_suite.py \
 		--config $(BENCHMARK_CONFIG)
 
 report:

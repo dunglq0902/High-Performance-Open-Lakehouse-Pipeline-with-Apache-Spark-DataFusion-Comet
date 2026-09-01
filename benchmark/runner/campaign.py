@@ -25,6 +25,9 @@ from benchmark.runner.canonical import write_json
 EngineName = Literal["spark_baseline", "comet_accelerated"]
 RunPhase = Literal["correctness", "plan_capture", "measurement"]
 
+_RETRYABLE_FAILURE_STATUSES = frozenset({"failed", "timeout"})
+_NON_RETRYABLE_FAILURE_STATUSES = frozenset({"invalid_result", "invalid_environment"})
+
 
 class CampaignError(ValueError):
     """A campaign cannot proceed without violating its immutable protocol."""
@@ -49,6 +52,14 @@ class CampaignRun:
 
 @dataclass(frozen=True, slots=True)
 class CampaignReport:
+    """Campaign counters after one invocation.
+
+    ``executed`` counts planned run slots successfully executed and published during this
+    invocation, not individual attempts. Consequently, every complete campaign satisfies
+    ``executed + resumed == planned`` even when retries occurred. ``failed`` counts planned runs
+    whose final attempt failed; intermediate failed attempts are evidence, not additional runs.
+    """
+
     experiment_id: str
     planned: int
     executed: int
@@ -75,6 +86,18 @@ class CampaignExecutor(Protocol):
     """Adapter implemented by the native runtime launcher."""
 
     def __call__(self, run: CampaignRun) -> Mapping[str, Any]: ...
+
+
+class CampaignAttemptRecovery(Protocol):
+    """Optional executor hook that closes admitted attempts interrupted before publication."""
+
+    def recover_interrupted_attempt(
+        self,
+        run: CampaignRun,
+        *,
+        raw_path: Path,
+        failure_root: Path,
+    ) -> None: ...
 
 
 RunProvenanceResolver = Callable[[CampaignRun], Mapping[str, Any]]
@@ -262,6 +285,18 @@ def _load_record(path: Path) -> dict[str, Any]:
     return value
 
 
+def _failure_attempt_path(failure_root: Path, run: CampaignRun) -> Path:
+    """Return the next immutable failed-attempt path for a planned run."""
+
+    directory = failure_root / run.experiment_id / run.engine
+    attempt = 1
+    while True:
+        candidate = directory / f"{run.run_id}-attempt-{attempt:04d}.json"
+        if not candidate.exists():
+            return candidate
+        attempt += 1
+
+
 def _assert_correctness_gate(records: Mapping[str, Mapping[str, Any]]) -> None:
     selected = [
         records.get("correctness-spark_baseline"),
@@ -326,7 +361,31 @@ class CampaignRunner:
         *,
         continue_on_failure: bool = False,
         expected_provenance: RunProvenanceResolver | None = None,
+        failure_root: Path | None = None,
+        max_attempts: int = 1,
     ) -> CampaignReport:
+        """Execute a campaign with bounded attempts and immutable publication.
+
+        The default single-attempt mode retains the original behavior, including publishing a
+        failed terminal record to ``raw_root``. Retry mode requires ``failure_root`` so every
+        failed attempt is preserved outside ``raw_root`` while only a succeeded record is
+        published as a resumable raw result. Only transient ``failed`` and ``timeout`` statuses
+        are retried; invalid results and environments are preserved once and hard-stop the
+        campaign.
+        """
+
+        if isinstance(max_attempts, bool) or not isinstance(max_attempts, int) or max_attempts < 1:
+            raise CampaignError("max_attempts must be an integer greater than or equal to one")
+        if max_attempts > 1 and failure_root is None:
+            raise CampaignError("failure_root is required when max_attempts is greater than one")
+        if failure_root is not None:
+            resolved_raw_root = raw_root.resolve()
+            resolved_failure_root = failure_root.resolve()
+            if resolved_failure_root == resolved_raw_root or resolved_failure_root.is_relative_to(
+                resolved_raw_root
+            ):
+                raise CampaignError("failure_root must be outside raw_root")
+
         plan = plan_campaign(manifest)
         records: dict[str, Mapping[str, Any]] = {}
         executed = 0
@@ -356,6 +415,62 @@ class CampaignRunner:
         )
         for provenance in expected_by_run.values():
             _assert_complete_expected_provenance(provenance)
+        recovery = getattr(executor, "recover_interrupted_attempt", None)
+        if failure_root is not None and callable(recovery):
+            if expected_provenance is None:
+                raise CampaignError(
+                    "attempt recovery requires current campaign provenance before interrupted "
+                    "evidence can be closed"
+                )
+            for run in plan:
+                recovery(
+                    run,
+                    raw_path=run.raw_path(raw_root),
+                    failure_root=failure_root,
+                )
+        failure_history: dict[str, tuple[Mapping[str, Any], ...]] = {}
+        if failure_root is not None:
+            expected_failure_paths: set[Path] = set()
+            for run in plan:
+                directory = failure_root / run.experiment_id / run.engine
+                paths = tuple(sorted(directory.glob(f"{run.run_id}-attempt-*.json")))
+                expected_failure_paths.update(paths)
+                records_for_run: list[Mapping[str, Any]] = []
+                for attempt_index, failure_path in enumerate(paths, 1):
+                    if failure_path.name != f"{run.run_id}-attempt-{attempt_index:04d}.json":
+                        raise CampaignError(
+                            f"failed-attempt sequence is not contiguous: {failure_path}"
+                        )
+                    failure_record = _load_record(failure_path)
+                    validate_run_record(
+                        failure_record,
+                        run,
+                        self._validator,
+                        expected_provenance=expected_by_run.get(run.run_id),
+                    )
+                    if failure_record.get("status") == "succeeded":
+                        raise CampaignError(
+                            f"failed-attempt history contains a successful record: {failure_path}"
+                        )
+                    records_for_run.append(failure_record)
+                failure_history[run.run_id] = tuple(records_for_run)
+            failure_campaign_root = failure_root / plan[0].experiment_id
+            actual_failure_paths = (
+                {path for path in failure_campaign_root.rglob("*.json") if path.is_file()}
+                if failure_campaign_root.is_dir()
+                else set()
+            )
+            if actual_failure_paths and expected_provenance is None:
+                raise CampaignError(
+                    "resume requires current campaign provenance before failed-attempt history "
+                    "can be used"
+                )
+            unexpected_failure_paths = sorted(actual_failure_paths - expected_failure_paths)
+            if unexpected_failure_paths:
+                rendered = ", ".join(path.as_posix() for path in unexpected_failure_paths)
+                raise CampaignError(
+                    f"failed-attempt directory contains unexpected artifacts: {rendered}"
+                )
         resumable_records: dict[str, Mapping[str, Any]] = {}
         for run in plan:
             path = existing_paths.get(run.run_id)
@@ -368,9 +483,21 @@ class CampaignRunner:
                 self._validator,
                 expected_provenance=expected_by_run[run.run_id],
             )
+            if failure_root is not None and existing_record.get("status") != "succeeded":
+                raise CampaignError(f"retry-enabled raw artifact is not successful: {path}")
             resumable_records[run.run_id] = existing_record
 
         for run in plan:
+            prior_non_retryable = [
+                record.get("status")
+                for record in failure_history.get(run.run_id, ())
+                if record.get("status") in _NON_RETRYABLE_FAILURE_STATUSES
+            ]
+            if prior_non_retryable:
+                raise CampaignError(
+                    f"campaign remains hard-stopped by prior non-retryable status for "
+                    f"{run.run_id}: {prior_non_retryable[-1]!r}"
+                )
             if run.phase == "measurement":
                 _assert_correctness_gate(records)
                 _assert_plan_gate(records)
@@ -380,19 +507,39 @@ class CampaignRunner:
                 record = resumable_records[run.run_id]
                 resumed += 1
             else:
-                record = dict(executor(run))
-                validate_run_record(
-                    record,
-                    run,
-                    self._validator,
-                    expected_provenance=expected_by_run.get(run.run_id),
-                )
-                write_json(path, record)
-                executed += 1
+                prior_failures = failure_history.get(run.run_id, ())
+                remaining_attempts = max_attempts - len(prior_failures)
+                record = dict(prior_failures[-1]) if prior_failures else {}
+                for _attempt in range(remaining_attempts):
+                    record = dict(executor(run))
+                    validate_run_record(
+                        record,
+                        run,
+                        self._validator,
+                        expected_provenance=expected_by_run.get(run.run_id),
+                    )
+                    status = record.get("status")
+                    if status == "succeeded":
+                        write_json(path, record)
+                        executed += 1
+                        break
+                    if failure_root is None:
+                        write_json(path, record)
+                    else:
+                        write_json(_failure_attempt_path(failure_root, run), record)
+                    if failure_root is not None and status in _NON_RETRYABLE_FAILURE_STATUSES:
+                        raise CampaignError(
+                            f"campaign hard-stopped after {run.run_id} produced non-retryable "
+                            f"status={status!r}; max_attempts does not apply"
+                        )
+                    if status not in _RETRYABLE_FAILURE_STATUSES:
+                        break
             records[run.run_id] = record
             if record.get("status") != "succeeded" and not continue_on_failure:
                 raise CampaignError(
-                    f"campaign stopped after {run.run_id} status={record.get('status')!r}"
+                    f"campaign stopped after {run.run_id} exhausted its global budget of "
+                    f"{max_attempts} attempt(s); "
+                    f"status={record.get('status')!r}"
                 )
 
         succeeded = sum(record.get("status") == "succeeded" for record in records.values())

@@ -60,10 +60,21 @@ def test_profile_contracts_are_normative_and_non_research() -> None:
     small = load_profile(SMALL_PROFILE)
     assert small.benchmark_eligible is True
     assert small.profile_id == "small"
-    assert small.dataset_revision == 2
-    assert small.dataset_id == "ecommerce-small-uniform-seed-20260827-v2"
-    assert small.as_canonical_mapping()["dataset_revision"] == 2
+    assert small.dataset_revision == 3
+    assert small.dataset_id == "ecommerce-small-uniform-seed-20260827-v3"
+    assert small.as_canonical_mapping()["dataset_revision"] == 3
     assert small.counts["orders"] == 1_000_000
+    assert small.rows_per_file["order_items"] == 1_000_000
+
+
+def test_benchmark_profile_rejects_fragmented_order_item_targets(tmp_path: Path) -> None:
+    decoded = yaml.safe_load(SMALL_PROFILE.read_text(encoding="utf-8"))
+    decoded["rows_per_file"]["order_items"] = 500_000
+    invalid_profile = tmp_path / "fragmented-benchmark.yaml"
+    invalid_profile.write_text(yaml.safe_dump(decoded), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="undersized fact-file row targets"):
+        load_profile(invalid_profile)
 
 
 def test_field_prf_is_the_declared_sha256_material() -> None:

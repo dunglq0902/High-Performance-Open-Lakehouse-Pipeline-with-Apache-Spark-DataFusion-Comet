@@ -390,7 +390,12 @@ SQL file là nguồn sự thật duy nhất của logic query. Manifest xác đ�
    - Baseline: không đặt `spark.plugins`; dùng Spark shuffle manager mặc định.
    - Comet: đặt `spark.plugins=org.apache.spark.CometPlugin`, `spark.shuffle.manager=org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager`, và các key `spark.comet.*` đã khóa ở Mục 7/12.
    - Runner phải từ chối mọi engine-specific delta nằm ngoài allowlist và lưu full SparkConf đã redacted vào result artifact.
-5. **Dữ liệu bất biến**: Đọc cùng URI, Iceberg snapshot ID và dataset manifest hash. Không regenerate/compact dữ liệu giữa hai lượt trong một comparison block.
+5. **Dữ liệu bất biến**: Đọc cùng URI, Iceberg snapshot ID và dataset manifest hash. Full semantic
+   validation tạo một attestation gắn với clean Git HEAD, runtime lock, Python/PyArrow, manifest và
+   SHA-256 của exact Parquet inventory. Mỗi lần tái sử dụng vẫn re-hash toàn bộ Parquet; không dùng
+   mtime/size như bằng chứng nội dung. Không regenerate/compact dữ liệu giữa hai lượt trong một
+   comparison block. Attestation này là trusted-local cache receipt, không phải chữ ký mật mã hay
+   chứng thực từ bên thứ ba; publication gate phải tự xác minh receipt và inventory hiện tại.
 6. **Cache policy rõ ràng**: Ma trận chính là warm-storage-cache benchmark; không gọi `cache()`/`persist()`, xóa Spark catalog/cache giữa query và pre-warm cả hai engine bằng cùng quy trình. Cold-cache benchmark là experiment riêng; không được trộn số liệu.
 7. **Thứ tự chạy cân bằng**: Runner sinh lịch `AB/BA` bằng seed cố định để giảm ảnh hưởng nhiệt độ máy và storage cache. Lịch chạy được lưu trong manifest.
 8. **Primary/diagnostic config tách biệt**: Cấu hình primary dùng Spark-compatible defaults; các option `allowIncompatible`, forced join hoặc native write chỉ được bật trong experiment chẩn đoán có nhãn riêng.
@@ -432,7 +437,16 @@ Quy tắc số lần lặp:
 | Core Micro, Business và TPC-H SF1 | 10 | Median/p50, IQR, min/max, failures |
 | TPC-H SF10 tùy chọn | 5 | Median/p50, IQR, min/max, failures; gắn nhãn exploratory |
 
-Run lỗi/timeout không được âm thầm loại bỏ. Runner ghi trạng thái và nguyên nhân; nếu cần chạy lại thì chạy lại toàn bộ comparison block tương ứng. Outlier vẫn giữ trong raw data; việc loại outlier chỉ được thực hiện ở analysis layer với quy tắc công bố trước.
+Run lỗi/timeout không được âm thầm loại bỏ. Mỗi planned run có tối đa ba execution attempts cho lỗi
+tạm thời; mỗi attempt lỗi giữ nguyên record và log bất biến ngoài accepted `results/raw`, còn raw
+chính thức chỉ được publish khi attempt thành công. Nếu hết giới hạn, campaign dừng và comparison
+block không được coi là hoàn chỉnh; lần gọi resume tiếp theo tiếp tục bằng attempt mới nhưng không
+ghi đè bằng chứng cũ. Correctness mismatch, plan gate fail và environment gate fail vẫn là hard gate,
+không được biến thành kết quả hợp lệ bằng retry trong cùng invocation hoặc invocation resume sau.
+Campaign verification phải khóa run-attempt tree, failed records, capacity, calibration, Medallion
+audit và dataset receipt; số attempt phải bằng planned runs cộng failed-attempt records. Outlier
+thành công vẫn giữ trong raw data; việc loại outlier chỉ được thực hiện ở analysis layer với quy tắc
+công bố trước.
 
 Không báo p95 cho ma trận rút gọn này. Nếu một workload được chạy ít nhất 20 measurement hợp lệ
 trong campaign riêng, p95 có thể xuất hiện như chỉ số phụ kèm phương pháp nội suy.
@@ -1062,7 +1076,9 @@ Nếu bất kỳ thành phần nào đổi, runner tạo comparison unit/campaig
 
 Mỗi workload trải qua bốn pha, có artifact tách biệt:
 
-1. **Prepare**: xác minh environment/dataset và pre-warm theo policy.
+1. **Prepare**: full-validate mỗi dataset duy nhất một lần, tạo content-bound attestation; các plan
+   và Medallion build tái sử dụng chỉ sau khi attestation re-hash exact Parquet inventory; sau đó xác
+   minh environment và pre-warm theo policy.
 2. **Correctness**: chạy baseline và Comet ngoài measurement set, đối chiếu kết quả.
 3. **Plan capture**: lấy initial/final AQE plan, annotated fallback và native plan; diagnostic logging được phép bật.
 4. **Measurement**: tắt tracing/debug/native-plan logging có overhead, thực hiện lịch paired randomized và thu raw metrics.

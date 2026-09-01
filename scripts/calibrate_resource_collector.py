@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import platform
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 from benchmark.collectors.resources import (
@@ -18,7 +19,7 @@ from benchmark.collectors.resources import (
     create_resource_source,
     measure_collector_overhead,
 )
-from benchmark.runner.canonical import sha256_file, write_json
+from benchmark.runner.canonical import sha256_file, sha256_value, write_json
 
 ROOT = Path(__file__).resolve().parents[1]
 COLLECTOR_PATH = ROOT / "benchmark/collectors/resources.py"
@@ -115,15 +116,59 @@ def run_calibration(
     )
 
 
+def bind_calibration_environment(
+    artifact: dict[str, object],
+    *,
+    git_commit: str,
+    container_image_digest: str,
+    storage_identity_sha256: str,
+    cpu_model: str,
+) -> dict[str, object]:
+    """Bind a measured calibration to the exact reusable campaign environment."""
+
+    value = {
+        **artifact,
+        "environment": {
+            "git_commit": git_commit,
+            "container_image_digest": container_image_digest,
+            "storage_identity_sha256": storage_identity_sha256,
+            "cpu_model": cpu_model,
+        },
+        "created_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    }
+    value["artifact_sha256"] = sha256_value(value)
+    return value
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--repetitions", type=int, default=7)
     parser.add_argument("--work-units", type=int, default=2_000_000)
+    parser.add_argument("--git-commit")
+    parser.add_argument("--container-image-digest")
+    parser.add_argument("--storage-identity-sha256")
+    parser.add_argument("--cpu-model")
     args = parser.parse_args()
     if args.repetitions < 3:
         parser.error("repetitions must be at least 3")
     artifact = run_calibration(repetitions=args.repetitions, work_units=args.work_units)
+    identity_values = (
+        args.git_commit,
+        args.container_image_digest,
+        args.storage_identity_sha256,
+        args.cpu_model,
+    )
+    if any(identity_values) and not all(identity_values):
+        parser.error("calibration environment identity must be supplied as one complete set")
+    if all(identity_values):
+        artifact = bind_calibration_environment(
+            artifact,
+            git_commit=args.git_commit,
+            container_image_digest=args.container_image_digest,
+            storage_identity_sha256=args.storage_identity_sha256,
+            cpu_model=args.cpu_model,
+        )
     write_json(args.output, artifact)
     if artifact["status"] != "passed":
         raise SystemExit(2)

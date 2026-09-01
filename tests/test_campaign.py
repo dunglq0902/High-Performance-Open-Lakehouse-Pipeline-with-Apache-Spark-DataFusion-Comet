@@ -177,6 +177,245 @@ def test_campaign_writes_immutable_records_and_resumes(tmp_path: Path) -> None:
     assert len(calls) == 8
 
 
+@pytest.mark.parametrize("transient_status", ["failed", "timeout"])
+def test_campaign_retries_transient_attempts_outside_raw_and_counts_run_slots(
+    tmp_path: Path, transient_status: str
+) -> None:
+    raw_root = tmp_path / "raw"
+    failure_root = tmp_path / "failed-attempts"
+    attempts: dict[str, int] = {}
+
+    def fail_first_attempt(run):
+        attempts[run.run_id] = attempts.get(run.run_id, 0) + 1
+        status = (
+            transient_status
+            if run.run_id == "correctness-spark_baseline" and attempts[run.run_id] == 1
+            else "succeeded"
+        )
+        return raw_record(run, status=status)
+
+    first = runner().run(
+        manifest(measurements=1),
+        raw_root,
+        fail_first_attempt,
+        failure_root=failure_root,
+        max_attempts=2,
+    )
+
+    assert first.complete
+    assert first.planned == 6
+    assert first.executed == first.planned
+    assert first.resumed == 0
+    assert attempts["correctness-spark_baseline"] == 2
+    raw_records = [
+        json.loads(path.read_text(encoding="utf-8")) for path in raw_root.rglob("*.json")
+    ]
+    assert len(raw_records) == first.planned
+    assert {record["status"] for record in raw_records} == {"succeeded"}
+    failure_paths = list(failure_root.rglob("*.json"))
+    assert [path.name for path in failure_paths] == ["correctness-spark_baseline-attempt-0001.json"]
+    assert json.loads(failure_paths[0].read_text(encoding="utf-8"))["status"] == transient_status
+
+    resumed = runner().run(
+        manifest(measurements=1),
+        raw_root,
+        fail_first_attempt,
+        expected_provenance=current_provenance,
+        failure_root=failure_root,
+        max_attempts=2,
+    )
+    assert resumed.complete
+    assert resumed.executed == 0
+    assert resumed.resumed == resumed.planned
+
+
+def test_interrupted_attempt_recovery_runs_before_global_retry_budget(tmp_path: Path) -> None:
+    raw_root = tmp_path / "raw"
+    failure_root = tmp_path / "failed-attempts"
+    calls: list[str] = []
+    recovered: list[str] = []
+
+    class RecoveringExecutor:
+        def recover_interrupted_attempt(self, run, *, raw_path: Path, failure_root: Path) -> None:
+            if run.run_id != "correctness-spark_baseline" or raw_path.exists():
+                return
+            target = (
+                failure_root / run.experiment_id / run.engine / f"{run.run_id}-attempt-0001.json"
+            )
+            if target.exists():
+                return
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(raw_record(run, status="failed")), encoding="utf-8")
+            recovered.append(run.run_id)
+
+        def __call__(self, run):
+            calls.append(run.run_id)
+            return raw_record(run)
+
+    report = runner().run(
+        manifest(measurements=1),
+        raw_root,
+        RecoveringExecutor(),
+        expected_provenance=current_provenance,
+        failure_root=failure_root,
+        max_attempts=2,
+    )
+
+    assert report.complete
+    assert recovered == ["correctness-spark_baseline"]
+    assert calls.count("correctness-spark_baseline") == 1
+    assert len(calls) == report.planned
+    failure = next(failure_root.rglob("*.json"))
+    assert failure.name == "correctness-spark_baseline-attempt-0001.json"
+
+
+@pytest.mark.parametrize("hard_status", ["invalid_result", "invalid_environment"])
+def test_campaign_hard_stops_non_retryable_status_after_one_attempt(
+    tmp_path: Path, hard_status: str
+) -> None:
+    raw_root = tmp_path / "raw"
+    failure_root = tmp_path / "failed-attempts"
+    calls: list[str] = []
+
+    def return_hard_failure(run):
+        calls.append(run.run_id)
+        return raw_record(run, status=hard_status)
+
+    with pytest.raises(CampaignError, match="non-retryable.*max_attempts does not apply"):
+        runner().run(
+            manifest(measurements=1),
+            raw_root,
+            return_hard_failure,
+            continue_on_failure=True,
+            failure_root=failure_root,
+            max_attempts=3,
+        )
+
+    assert calls == ["correctness-spark_baseline"]
+    assert not list(raw_root.rglob("*.json"))
+    failure_paths = list(failure_root.rglob("*.json"))
+    assert [path.name for path in failure_paths] == ["correctness-spark_baseline-attempt-0001.json"]
+    assert json.loads(failure_paths[0].read_text(encoding="utf-8"))["status"] == hard_status
+
+    calls.clear()
+
+    def unexpected_success(run):
+        calls.append(run.run_id)
+        return raw_record(run)
+
+    with pytest.raises(CampaignError, match="remains hard-stopped by prior non-retryable"):
+        runner().run(
+            manifest(measurements=1),
+            raw_root,
+            unexpected_success,
+            expected_provenance=current_provenance,
+            failure_root=failure_root,
+            max_attempts=3,
+        )
+    assert calls == []
+
+
+def test_campaign_preserves_all_terminal_failures_and_continue_semantics(
+    tmp_path: Path,
+) -> None:
+    raw_root = tmp_path / "raw"
+    failure_root = tmp_path / "failed-attempts"
+
+    def fail_final_measurement(run):
+        status = "failed" if run.run_id == "measurement-p0001-o2-comet_accelerated" else "succeeded"
+        return raw_record(run, status=status)
+
+    report = runner().run(
+        manifest(measurements=1),
+        raw_root,
+        fail_final_measurement,
+        continue_on_failure=True,
+        failure_root=failure_root,
+        max_attempts=2,
+    )
+
+    assert not report.complete
+    assert report.planned == 6
+    assert report.executed == 5
+    assert report.succeeded == 5
+    assert report.failed == 1
+    assert len(list(raw_root.rglob("*.json"))) == 5
+    assert sorted(path.name for path in failure_root.rglob("*.json")) == [
+        "measurement-p0001-o2-comet_accelerated-attempt-0001.json",
+        "measurement-p0001-o2-comet_accelerated-attempt-0002.json",
+    ]
+
+
+def test_campaign_stops_after_bounded_attempts_without_overwriting_failures(
+    tmp_path: Path,
+) -> None:
+    raw_root = tmp_path / "raw"
+    failure_root = tmp_path / "failed-attempts"
+
+    def fail_first_run(run):
+        status = "failed" if run.run_id == "correctness-spark_baseline" else "succeeded"
+        return raw_record(run, status=status)
+
+    calls = 0
+
+    def count_and_fail(run):
+        nonlocal calls
+        calls += 1
+        return fail_first_run(run)
+
+    for _invocation in range(2):
+        with pytest.raises(CampaignError, match=r"global budget of 2 attempt\(s\)"):
+            runner().run(
+                manifest(measurements=1),
+                raw_root,
+                count_and_fail,
+                expected_provenance=current_provenance,
+                failure_root=failure_root,
+                max_attempts=2,
+            )
+        assert not list(raw_root.rglob("*.json"))
+        paths = sorted(failure_root.rglob("*.json"))
+        assert len(paths) == 2
+        assert len({path.name for path in paths}) == 2
+
+    assert calls == 2
+
+
+def test_campaign_retry_requires_separate_failure_root_before_execution(tmp_path: Path) -> None:
+    calls = []
+
+    def execute(run):
+        calls.append(run.run_id)
+        return raw_record(run)
+
+    with pytest.raises(CampaignError, match="failure_root is required"):
+        runner().run(manifest(), tmp_path, execute, max_attempts=2)
+    with pytest.raises(CampaignError, match="outside raw_root"):
+        runner().run(
+            manifest(),
+            tmp_path,
+            execute,
+            failure_root=tmp_path / "failed-attempts",
+            max_attempts=2,
+        )
+    assert calls == []
+
+
+@pytest.mark.parametrize("max_attempts", [0, -1, True, 1.5])
+def test_campaign_rejects_invalid_max_attempts_before_execution(
+    tmp_path: Path, max_attempts: object
+) -> None:
+    calls = []
+
+    def execute(run):
+        calls.append(run.run_id)
+        return raw_record(run)
+
+    with pytest.raises(CampaignError, match="max_attempts"):
+        runner().run(manifest(), tmp_path, execute, max_attempts=max_attempts)  # type: ignore[arg-type]
+    assert calls == []
+
+
 def test_campaign_refuses_mismatched_resume_and_failed_gate(tmp_path: Path) -> None:
     plan = plan_campaign(manifest())
     first_path = plan[0].raw_path(tmp_path)

@@ -43,6 +43,32 @@
         "comet_profile_sha256": {"$ref": "#/$defs/hash"}
       }
     },
+    "dataset_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "attestation_path",
+        "attestation_file_sha256",
+        "attestation_payload_sha256",
+        "content_identity_sha256",
+        "validator_git_commit"
+      ],
+      "properties": {
+        "mode": {"const": "content-bound-attestation-v1"},
+        "attestation_path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.json$"
+        },
+        "attestation_file_sha256": {"$ref": "#/$defs/hash"},
+        "attestation_payload_sha256": {"$ref": "#/$defs/hash"},
+        "content_identity_sha256": {"$ref": "#/$defs/hash"},
+        "validator_git_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
     "manifest_sha256": {"$ref": "#/$defs/hash"},
     "readiness": {
       "type": "object",

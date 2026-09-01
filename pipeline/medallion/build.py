@@ -5,12 +5,15 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pyarrow as pa  # type: ignore[import-untyped]
 
-from benchmark.runner.canonical import sha256_file, write_json
+from benchmark.runner.canonical import sha256_file, sha256_value, write_json
+from benchmark.runner.dataset_attestation import verify_attestation
+from benchmark.runner.runtime import validate_runtime_lock
 from data.generator.constants import TABLE_ORDER as ECOMMERCE_TABLE_ORDER
 from data.generator.validation import validate_dataset
 from data.tpch.contract import TABLE_ORDER as TPCH_TABLE_ORDER
@@ -412,6 +415,50 @@ def _quality_audit(spark: Any) -> dict[str, int]:
     return {name: int(spark.sql(sql).collect()[0][0]) for name, sql in queries.items()}
 
 
+def _validate_source_dataset(
+    manifest_path: Path,
+    *,
+    tpch_dataset: bool,
+    attestation_path: Path | None,
+    expected_git_commit: str | None,
+) -> str | None:
+    """Use full semantics or a current content-bound attestation before Spark import."""
+
+    if (attestation_path is None) != (expected_git_commit is None):
+        raise RuntimeError(
+            "dataset validation attestation and expected Git commit must be supplied together"
+        )
+    if attestation_path is not None:
+        root = Path(__file__).resolve().parents[2]
+        runtime_lock = validate_runtime_lock(
+            root / "runtime-versions.lock",
+            root / "benchmark/schemas/runtime-lock.schema.json",
+        )
+        components = {component["name"]: component for component in runtime_lock["components"]}
+        verify_attestation(
+            root,
+            manifest_path,
+            attestation_path,
+            expected_python_version=str(components["python"]["version"]),
+            expected_git_commit=str(expected_git_commit),
+        )
+        return sha256_file(attestation_path)
+    if tpch_dataset:
+        validate_tpch_dataset(manifest_path.parent)
+    else:
+        validate_dataset(manifest_path.parent)
+    return None
+
+
+def _write_audit(path: Path, payload: Mapping[str, Any]) -> None:
+    value = {
+        **payload,
+        "created_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    }
+    value["artifact_sha256"] = sha256_value(value)
+    write_json(path, value)
+
+
 def main() -> None:
     from pyspark.sql import SparkSession
 
@@ -419,6 +466,8 @@ def main() -> None:
     parser.add_argument("--dataset-manifest", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--allow-non-benchmark", action="store_true")
+    parser.add_argument("--dataset-validation-attestation", type=Path)
+    parser.add_argument("--expected-git-commit")
     args = parser.parse_args()
 
     manifest = json.loads(args.dataset_manifest.read_text(encoding="utf-8"))
@@ -427,10 +476,12 @@ def main() -> None:
     if not manifest.get("benchmark_eligible") and not args.allow_non_benchmark:
         raise RuntimeError("Medallion research build requires a benchmark-eligible dataset")
     tpch_dataset = _is_tpch_manifest(manifest)
-    if tpch_dataset:
-        validate_tpch_dataset(args.dataset_manifest.parent)
-    else:
-        validate_dataset(args.dataset_manifest.parent)
+    attestation_sha256 = _validate_source_dataset(
+        args.dataset_manifest,
+        tpch_dataset=tpch_dataset,
+        attestation_path=args.dataset_validation_attestation,
+        expected_git_commit=args.expected_git_commit,
+    )
 
     spark = SparkSession.builder.appName("lakehouse-medallion-build").getOrCreate()
     try:
@@ -439,7 +490,7 @@ def main() -> None:
             table_counts, tpch_snapshots = _build_tpch_tables(
                 spark, args.dataset_manifest, manifest
             )
-            write_json(
+            _write_audit(
                 args.output,
                 {
                     "schema_version": 1,
@@ -448,6 +499,7 @@ def main() -> None:
                     "runtime": runtime,
                     "dataset_id": manifest["dataset_id"],
                     "dataset_manifest_sha256": sha256_file(args.dataset_manifest),
+                    "dataset_validation_attestation_sha256": attestation_sha256,
                     "benchmark_eligible": bool(manifest["benchmark_eligible"]),
                     "scale_factor": 1,
                     "table_counts": table_counts,
@@ -512,7 +564,7 @@ def main() -> None:
                 for table_name in GOLD_TABLE_SQL
             },
         }
-        write_json(
+        _write_audit(
             args.output,
             {
                 "schema_version": 1,
@@ -521,6 +573,7 @@ def main() -> None:
                 "runtime": runtime,
                 "dataset_id": manifest["dataset_id"],
                 "dataset_manifest_sha256": sha256_file(args.dataset_manifest),
+                "dataset_validation_attestation_sha256": attestation_sha256,
                 "benchmark_eligible": bool(manifest["benchmark_eligible"]),
                 "bronze_counts": bronze_counts,
                 "derived_counts": derived_counts,

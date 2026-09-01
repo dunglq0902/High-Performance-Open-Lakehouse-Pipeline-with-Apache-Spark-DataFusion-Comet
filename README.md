@@ -144,13 +144,16 @@ make run-all PROFILE=smoke-local
 make research-data-ecommerce
 make research-data-tpch
 
-# Kiểm tra và lập kế hoạch cho 10 workload đã duyệt
-make validate-research
+# Tùy chọn: full-validate mỗi dataset duy nhất một lần và xuất 10 plan để review
 make research-plan
 
-# Chạy tuần tự 6 E-commerce + 4 TPC-H-derived campaign và dựng báo cáo
+# Luồng ngắn nhất: benchmark tự chuẩn bị attestation + plan, rồi chạy 10 campaign
+# Không cần chạy make validate-research trước bước này.
 make benchmark
 make report
+
+# Một campaign đã duyệt; vẫn tự full-validate và tạo attestation/plan canonical
+make benchmark-one BENCHMARK_CONFIG=benchmark/configs/benchmark-laptop-m02.yaml
 
 # Tương đương benchmark + report
 make run-all PROFILE=benchmark-laptop
@@ -169,18 +172,40 @@ fail-closed nếu worktree chưa sạch/commit hoặc active interpreter không 
 TPC-H SF1 còn khóa source archive, checksum, schema, row count, PK/FK, date bounds và nhãn
 `non-audited`.
 
+Suite preparation full-validate hai dataset duy nhất một lần, phát hành attestation gắn với clean
+Git commit, runtime lock, manifest và SHA-256 của toàn bộ Parquet, rồi dùng attestation đó để tạo 10
+plan bất biến. Đây là cache receipt trong trusted local workspace, không phải chữ ký mật mã hay xác
+nhận của bên thứ ba; strict report vẫn tự kiểm tra receipt và băm lại inventory vật lý. Cùng một
+commit, Spark image và Docker-volume identity dùng chung collector calibration; các workload cùng
+dataset/attestation dùng chung Medallion snapshot đã pin. Mỗi run có tối đa ba attempt cho
+`failed`/`timeout`; invalid result/environment hard-stop cả khi resume. Attempt lỗi được giữ bất biến
+ngoài `results/raw`, và strict verification khóa cả attempt/log lẫn capacity, calibration, Medallion
+và attestation trước khi cho phép công bố.
+
 ## Trạng thái hiện tại
 
-Control plane và toàn bộ core workload đã được triển khai, nhưng **nghiên cứu chưa hoàn tất** vì
-hai primary dataset và 10 campaign chưa hoàn tất. E-commerce
-`ecommerce-small-uniform-seed-20260827-v1` đã content-validate từ clean commit
-`80dd6676627e0cb100538be196bb0aab125d616f` (10.110.000 dòng, 22 Parquet, 241.936.114 byte), nhưng
-chỉ còn là diagnostic artifact: manifest cũ không ghi Python provenance và được sinh bằng Python
-3.12.11, khác runtime lock 3.12.13. Sáu config E-commerce hiện trỏ tới primary revision `v2`, chưa
-được materialize. Gate code mới nhất có 238 test pass, Ruff/format/mypy và Compose config pass;
-Spark analyzer thật xác nhận schema Q01/Q03/Q06/Q12. Native smoke ngày 28/08/2026 pass toàn bộ 21
-gate tại `.artifacts/smoke/smoke-20260828T141856Z-3279/verification.json`; đó vẫn là readiness
-evidence, không phải benchmark để công bố.
+Control plane, toàn bộ core workload và primary TPC-H dataset đã sẵn sàng cho campaign. Primary
+E-commerce đã chuyển sang revision v3 để đáp ứng capacity gate về phân bố kích thước fact file:
+
+- E-commerce `ecommerce-small-uniform-seed-20260827-v3` giữ nguyên 10.110.000 dòng logic
+  (100.000 customers, 10.000 products, 1.000.000 orders, 4.000.000 order items và 5.000.000
+  events), nhưng gộp `order_items` thành 1.000.000 dòng/file để tạo 4 file thay vì 8 file nhỏ.
+  Profile dự kiến tạo tổng cộng 18 Parquet. Revision này phải được sinh từ final clean commit và
+  content-validate trước campaign; chưa có manifest SHA-256/provenance v3 để công bố.
+- TPC-H-derived `tpch-derived-sf1-852ad0a5ee31-v1`: 8.661.245 dòng trên đủ tám bảng, 9 Parquet,
+  370.681.574 byte. Manifest file SHA-256 là
+  `4aff1a0bc09c2b02f09e1c91f30cb0abb287b03976c2d24c5f211c8cf068a552`; generator v1.0.2 chạy
+  từ clean commit `be0a4981ab047a6d8b3926cb818be1b2932e8f5c`, bằng CPython 3.12.13, với DBGEN source commit
+  `852ad0a5ee31ebefeed884cea4188781dd9613a3` và archive SHA-256
+  `d0d92c4191c776bcc7bce84e0d2156c3a744c115fb9a9ccbcaac908313708c96`. Validator hiện dùng
+  Arrow kernels theo batch cho PK/FK/date gates nhưng giữ nguyên kiểm tra fail-closed qua ranh giới
+  batch/file.
+
+Tài liệu tĩnh này không khẳng định 10 campaign đã pass. Trạng thái có thể công bố duy nhất là trường
+`publishable` trong `results/reports/report-publishability.json` do lần chạy `make report` gần nhất
+tạo ra; khi artifact đó chưa tồn tại hoặc không ghi `true`, mọi số liệu chỉ là diagnostic. Native
+smoke ngày 28/08/2026 tại `.artifacts/smoke/smoke-20260828T141856Z-3279/verification.json` vẫn chỉ
+là readiness evidence, không phải kết quả benchmark để công bố.
 
 Các phiên bản, Maven coordinates, OCI digests và source checksums nằm trong
 [`runtime-versions.lock`](runtime-versions.lock). Trạng thái phạm vi đã triển khai và các phần còn

@@ -3,15 +3,20 @@ from pathlib import Path
 
 import pytest
 import yaml
+from jsonschema import Draft202012Validator
 
+from benchmark.runner.canonical import sha256_file, sha256_value
+from benchmark.runner.capacity import DEFAULT_CAPACITY_POLICY
 from benchmark.runner.config import (
     ConfigurationError,
+    build_experiment_manifest,
     load_document,
     redact,
     resolve_environment,
     validate_engine_matrix,
     validate_runtime_profile,
 )
+from benchmark.runner.dataset_attestation import VerifiedDataset
 from scripts.run_research_suite import ECOMMERCE_CORE_CONFIGS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -151,4 +156,76 @@ def test_checked_in_laptop_config_is_schema_valid_and_runtime_exact(
     validate_runtime_profile(config, ROOT)
     assert config["experiment"]["measurement_runs"] == 10
     assert config["experiment"]["warmup_runs"] == 2
-    assert config["workload"]["dataset_manifest"].endswith("seed-20260827-v2/manifest.json")
+    assert config["workload"]["dataset_manifest"].endswith("seed-20260827-v3/manifest.json")
+    assert set(config["experiment"]["labels"]).isdisjoint(
+        DEFAULT_CAPACITY_POLICY.small_file_exemption_labels
+    )
+
+
+def test_experiment_manifest_strictly_binds_verified_dataset_attestation(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "repository"
+    root.mkdir()
+
+    def artifact(relative: str) -> Path:
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"reviewed artifact: {relative}\n", encoding="utf-8")
+        return path
+
+    config = yaml.safe_load(SMOKE_CONFIG.read_text(encoding="utf-8"))
+    config_path = artifact("benchmark/configs/smoke.yaml")
+    runtime_lock_path = artifact("runtime-versions.lock")
+    workload_sql_path = artifact("benchmark/workloads/m02.sql")
+    workload_manifest_path = artifact("benchmark/workloads/m02.yaml")
+    dataset_manifest_path = artifact("data/generated/fixture/manifest.json")
+    uv_lock_path = artifact("uv.lock")
+    spark_defaults_path = artifact("infrastructure/spark/common.properties")
+    comet_profile_path = artifact("infrastructure/spark/comet.properties")
+    attestation_path = artifact(".artifacts/dataset-validations/fixture.json")
+    verified = VerifiedDataset(
+        suite="ecommerce",
+        dataset_id="fixture-v1",
+        manifest_path=dataset_manifest_path.resolve(),
+        manifest_sha256=sha256_file(dataset_manifest_path),
+        content_identity_sha256="a" * 64,
+        attestation_path=attestation_path.resolve(),
+        attestation_file_sha256=sha256_file(attestation_path),
+        attestation_sha256="b" * 64,
+        git_commit="c" * 40,
+        expected_python_version="3.12.13",
+        file_count=1,
+        total_bytes=1,
+    )
+
+    manifest = build_experiment_manifest(
+        config,
+        config_path=config_path,
+        runtime_lock_path=runtime_lock_path,
+        workload_sql_path=workload_sql_path,
+        workload_manifest_path=workload_manifest_path,
+        dataset_manifest_path=dataset_manifest_path,
+        uv_lock_path=uv_lock_path,
+        spark_defaults_path=spark_defaults_path,
+        comet_profile_path=comet_profile_path,
+        dataset_validation=verified,
+    )
+
+    assert manifest["dataset_validation"] == {
+        "mode": "content-bound-attestation-v1",
+        "attestation_path": ".artifacts/dataset-validations/fixture.json",
+        "attestation_file_sha256": sha256_file(attestation_path),
+        "attestation_payload_sha256": "b" * 64,
+        "content_identity_sha256": "a" * 64,
+        "validator_git_commit": "c" * 40,
+    }
+    manifest_for_hash = deepcopy(manifest)
+    assert manifest_for_hash.pop("manifest_sha256") == sha256_value(manifest_for_hash)
+
+    schema = yaml.safe_load(
+        (ROOT / "benchmark/schemas/experiment-manifest.schema.json").read_text(encoding="utf-8")
+    )
+    assert list(Draft202012Validator(schema).iter_errors(manifest)) == []
+    manifest["dataset_validation"]["unreviewed"] = "rejected"
+    assert list(Draft202012Validator(schema).iter_errors(manifest))

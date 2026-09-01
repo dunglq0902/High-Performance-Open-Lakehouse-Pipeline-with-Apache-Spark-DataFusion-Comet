@@ -19,7 +19,7 @@ workload:
   query_id: M08
   storage_profile: ecommerce_iceberg_rest
   data_path: lakehouse.bronze.events
-  dataset_manifest: data/generated/ecommerce-small-uniform-seed-20260827-v2/manifest.json
+  dataset_manifest: data/generated/ecommerce-small-uniform-seed-20260827-v3/manifest.json
   sql_file: workloads/micro/M08_window.sql
   manifest_file: workloads/manifests/micro/M08_window.yaml
   result_mode: collect
@@ -47,6 +47,7 @@ spark:
     spark.sql.parquet.compression.codec: snappy
     spark.speculation: false
     spark.eventLog.enabled: true
+    spark.eventLog.compress: false
     spark.eventLog.dir: file:///opt/lakehouse/.artifacts/spark-events
     spark.local.dir: /opt/lakehouse/.runtime/spark-local
     spark.sql.extensions: org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions

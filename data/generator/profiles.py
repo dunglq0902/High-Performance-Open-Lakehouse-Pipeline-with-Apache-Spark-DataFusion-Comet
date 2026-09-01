@@ -39,7 +39,7 @@ _BENCHMARK_MINIMUM_COUNTS = {
 
 _BENCHMARK_MINIMUM_ROWS_PER_FILE = {
     "orders": 250_000,
-    "order_items": 500_000,
+    "order_items": 1_000_000,
     "events": 500_000,
 }
 

@@ -1,104 +1,138 @@
-# Implementation status — 2026-08-30
+# Implementation status — 2026-08-31
 
-The research software is implemented end to end, but the empirical study is not complete. No
-performance claim is publishable until both primary datasets, all ten reviewed campaigns, and the
-rebuildable report exist and pass their fail-closed gates.
+The research software and primary TPC-H dataset are implemented and materialized. The primary
+E-commerce profile has moved to revision v3 and must be materialized from the final clean commit.
+The empirical publication state is deliberately not hard-coded in this document: it is determined
+by `results/reports/report-publishability.json`, rebuilt from the current immutable campaign
+evidence. Unless that artifact exists and contains `publishable: true`, no performance claim is
+publishable.
 
-## Implemented and locally verified
+## Implemented controls and pre-campaign evidence
 
 - Locked Spark 4.1.3, Scala 2.13.17, Java 17.0.19, Comet 1.0.0, Iceberg 1.11.0, Python 3.12.13,
   OCI images, Maven artifacts, Python lock, and TPC-H DBGEN source/archive checksum.
 - Docker Compose topology for MinIO, REST Iceberg catalog, one Spark master, one 2-core/5-GiB
   worker, and a bounded client container.
 - Deterministic E-commerce generation with revisioned dataset IDs, immutable manifests, exact
-  CPython version/implementation provenance, content hashes, PK/FK/date/funnel checks, and a
-  benchmark-eligible `small` profile.
-- TPC-H-derived SF1 acquisition/conversion implementation for all eight tables. The locked fork is
-  built from its `Makefile` in source-era GNU C89 mode, emits the fork's no-trailing-delimiter
-  format, and is converted to explicit Snappy Parquet schemas. Validation enforces source/build
-  provenance (including exact locked CPython), SF1 counts, ordered PKs, all declared FKs, date
-  bounds, raw/Parquet hashes, and the derived/non-audited notice. Incomplete DBGEN output is
-  removed atomically for a clean retry. This describes the implemented path; the full SF1 output
-  is not yet materialized.
+  CPython version/implementation provenance, physical and logical content hashes, PK/FK/date/funnel
+  checks, and a benchmark-eligible `small` profile.
+- TPC-H-derived SF1 acquisition and conversion for all eight tables. The locked fork is compiled in
+  source-era GNU C89 mode and converted to explicit Snappy Parquet schemas. The validator enforces
+  source/build provenance, exact SF1 counts, ordered PKs, all declared FKs, date bounds,
+  raw/Parquet hashes, and the derived/non-audited notice. Its row-scale PK, FK, and date comparisons
+  now use Arrow compute kernels while preserving cross-batch and cross-file ordering checks; that
+  validator revision is committed at `44304edaa5e2dd9920abed28256387f22a64f9bc`.
+- Content-bound dataset validation attestations. Suite preparation performs the expensive semantic
+  validation once per unique dataset, then binds the result to the clean Git commit, locked Python
+  and PyArrow runtimes, runtime lock, manifest bytes, and the SHA-256/size/row inventory of every
+  current Parquet file. Reuse rehashes the physical inventory and fails closed on drift. This is a
+  trusted-local-workspace cache receipt, not a cryptographic signature or external attestation;
+  strict publication independently verifies the receipt and current physical inventory.
 - E-commerce Bronze/Silver/Gold Iceberg pipeline and TPC-H-to-Iceberg import with explicit
-  `NOT NULL` schemas, persisted counts, source-manifest binding, and pinned snapshot IDs.
+  `NOT NULL` schemas, persisted counts, source-manifest/attestation binding, and pinned snapshot IDs.
+  For one clean commit, Spark image, persistent Docker-volume identity, dataset, and attestation,
+  the six E-commerce workloads share one Medallion build and the four TPC-H workloads share
+  another; collector calibration is also shared for that runtime identity. Recreated object-store
+  or catalog volumes force a new build.
 - Six reviewed E-commerce workloads (M02, M04, M05, M08, M10, B01) and four reviewed
-  TPC-H-derived SF1 workloads (Q01, Q03, Q06, Q12).
+  TPC-H-derived SF1 workloads (Q01, Q03, Q06, Q12). Suite preparation creates all ten deterministic,
+  immutable experiment manifests after validating the two unique datasets.
 - Deterministic paired AB/BA campaigns with correctness and complete-plan gates, warm-ups, hard
-  process-group timeouts, clean-commit provenance, zero-swap enforcement, and immutable raw
-  records. Resume now preflights every planned artifact before execution against the current Git
-  commit, image digest, dataset-manifest hash, SparkConf hash, SQL hash, relevant Iceberg snapshot
-  IDs, and host/resource identity; unplanned raw artifacts are rejected.
-- Attempt-aware, immutable campaign-verification publication binds the exact 24 raw records, the
-  current experiment manifest/config, and hashes of every referenced event log, plan, resource
-  sample, stdout, and stderr artifact. A successful resume records its executed/resumed counters
-  without overwriting earlier evidence.
+  process-group timeouts, clean-commit provenance, zero-swap enforcement, and immutable evidence.
+  Each planned run has at most three attempts. Failed attempt records and logs remain immutable
+  under the campaign artifact tree; only a successful terminal record is published to `results/raw`.
+  Only `failed`/`timeout` are retryable; invalid result/environment gates hard-stop across resumes.
+- Resume preflights every planned raw artifact against the current Git commit, image digest,
+  dataset-manifest hash, SparkConf hash, SQL hash, relevant Iceberg snapshot IDs, and host/resource
+  identity. Unplanned or unsuccessful raw artifacts are rejected.
+- Attempt-aware campaign verification binds the exact 24 successful raw records, experiment
+  manifest/config, every run-attempt tree and failed record, dataset receipt, capacity gate,
+  collector calibration, Medallion audit, and every referenced event log, plan, resource sample,
+  stdout, and stderr file. A successful resume records executed/resumed and total/failed-attempt
+  counters without overwriting earlier evidence.
+- Spark 4 rolling event-log V2 directories are collected after a fail-closed container-side
+  permission handoff. Benchmark profiles explicitly disable event-log compression so the strict
+  dependency-free JSON parser consumes the exact emitted segments.
 - Spark event-log attribution by measured `jobGroupId`, 200-ms worker/driver resource sampling,
   collector calibration below 2%, conservative final-AQE plan analysis, exact result hashes,
   descriptive statistics, paired speedups/resources, and deterministic bootstrap 95% CIs.
 - Rebuildable Markdown, JSON, CSV, and SVG reporting. `make report` is fail-closed: publication
-  requires exactly the ten current core campaigns, the latest valid 24/24 verification for each,
-  all four correctness/plan admission records, ten complete Spark/Comet pairs per workload,
-  complete collectors/plan analysis, and no resource-metric exclusions. Partial evidence can only
-  be rendered through the explicitly diagnostic path and receives a non-publishable banner;
-  rebuilds prune stale per-experiment side artifacts.
+  requires exactly the ten current core campaigns, the latest verification attempt for each to
+  pass 24/24, all correctness/plan gates, ten complete Spark/Comet pairs per workload, complete
+  collectors/plan analysis, no resource-metric exclusions, current input hashes, and one current
+  clean Git HEAD across all raw records. `make report-diagnostic` can render partial evidence but
+  marks it non-publishable.
 - Hosted unit/static CI plus scheduled/manual native Linux smoke workflow.
 
-Latest code-level evidence on this workstation:
+Fixed test-count claims are intentionally omitted because they become stale as gates are added. On
+the final clean pre-campaign commit, `make lint test compose-config` is the executable code-level
+gate. The native readiness evidence remains:
 
-- Exact local test runtime: CPython 3.12.13, compiled from the checksum-locked upstream source.
-- `ruff check` and `ruff format --check`: passed for 94 Python files.
-- `mypy`: passed for 65 source files.
-- `pytest`: 238 passed.
-- `docker compose config --quiet`: passed.
+- Exact local test runtime: checksum-locked CPython 3.12.13 through `uv` 0.8.15.
+- Docker Desktop Linux engine 29.7.2 with cgroup v2; Compose configuration validates locally.
 - The checksum-locked 21,867,962-byte TPC-H archive matches
-  `d0d92c4191c776bcc7bce84e0d2156c3a744c115fb9a9ccbcaac908313708c96`; its real DBGEN target
-  builds successfully with the reviewed command.
+  `d0d92c4191c776bcc7bce84e0d2156c3a744c115fb9a9ccbcaac908313708c96`; its DBGEN target builds
+  successfully with the reviewed command.
 - A real Spark analyzer run confirmed the expected schemas for Q01, Q03, Q06, and Q12.
 
 ## Primary data state
 
-- E-commerce `ecommerce-small-uniform-seed-20260827-v1` exists under `data/generated` and was
-  content-valid under the previous contract from clean commit
-  `80dd6676627e0cb100538be196bb0aab125d616f`. It contains 100,000 customers, 10,000 products,
-  1,000,000 orders, 4,000,000 order items, and 5,000,000 events in 22 Parquet files (241,936,114
-  bytes). Its legacy manifest still says `benchmark_eligible=true`, but it lacks Python provenance
-  and was generated with Python 3.12.11, so the current fail-closed contract treats it as diagnostic
-  only.
-- E-commerce revision `ecommerce-small-uniform-seed-20260827-v2` is the configured primary and
-  must be generated from a clean committed tree with CPython 3.12.13. It does not yet exist.
-- The locked TPC-H archive is cached under `.runtime/tpch-dbgen`, but
-  `data/generated/tpch-derived-sf1-v1` does not yet exist. Download/checksum, compiler availability,
-  archive layout, and the DBGEN build itself have been verified; full generation, conversion, and
-  dataset validation remain.
-- `results/raw` and `results/reports` contain no research result artifacts yet, and no core campaign
-  verification artifacts exist.
+The configured primary datasets currently have these states:
+
+| Dataset | Rows | Parquet files | Parquet bytes | Generator provenance |
+|---|---:|---:|---:|---|
+| `ecommerce-small-uniform-seed-20260827-v3` | 10,110,000 planned | 18 planned | pending generation | must be generated from final clean commit with CPython 3.12.13 |
+| `tpch-derived-sf1-852ad0a5ee31-v1` | 8,661,245 | 9 | 370,681,574 | generator v1.0.2, clean `be0a4981ab047a6d8b3926cb818be1b2932e8f5c`, CPython 3.12.13 |
+
+E-commerce v3 keeps 100,000 customers, 10,000 products, 1,000,000 orders, 4,000,000 order items,
+and 5,000,000 events. Its physical change raises the `order_items` target from 500,000 to 1,000,000
+rows per file, reducing that table from eight to four Parquet files. The generator contract now
+rejects a benchmark-eligible profile that reintroduces the fragmented target. All six core
+E-commerce configs point to v3; no campaign may start until its immutable manifest exists and full
+content validation passes.
+
+TPC-H-derived SF1 contains 25 nations, 5 regions, 10,000 suppliers, 150,000 customers, 200,000
+parts, 800,000 partsupp rows, 1,500,000 orders, and 6,001,215 lineitems. Its manifest file SHA-256
+is `4aff1a0bc09c2b02f09e1c91f30cb0abb287b03976c2d24c5f211c8cf068a552`, and its manifest
+self-hash is `0e563dd019407560858df4701cd4d5fc69d215348ddc499bbaf9b59bc31de1f8`. DBGEN is locked to
+source commit `852ad0a5ee31ebefeed884cea4188781dd9613a3` and archive SHA-256
+`d0d92c4191c776bcc7bce84e0d2156c3a744c115fb9a9ccbcaac908313708c96`; the generated raw
+`.tbl` inputs total 1,092,031,885 bytes.
+
+Dataset attestations and experiment plans are generated for the current clean control-plane commit,
+not for the older generator commits. A changed commit, runtime lock, manifest, runtime, or Parquet
+file invalidates reuse and requires a new attestation.
 
 ## Native evidence and its boundary
 
 Native Linux smoke passed on Docker Desktop/WSL2 on 2026-08-28. Artifact
 `.artifacts/smoke/smoke-20260828T141856Z-3279/verification.json` records 21 passed checks for equal
 schema/result/row count, the same Iceberg snapshot, runtime locks, baseline absence of native
-operators, Comet native operators, and golden-plan semantics. The TPC-H Spark analyzer also passed
-for all four reviewed queries.
+operators, Comet native operators, and golden-plan semantics. The Spark analyzer also passed for
+all four reviewed TPC-H-derived queries.
 
 Those artifacts prove readiness and the Spark/Comet/Iceberg vertical slice, not primary
-performance. On 2026-08-30 the Docker Desktop Linux engine was available again (server 29.7.2) and
-the repository's Compose configuration remained valid; every new native run still performs its own
-service/readiness gates.
+performance. This document likewise makes no claim that the ten core campaigns have passed; only
+the latest strict report publishability artifact may make that determination.
 
-## Remaining before the project is empirically complete
+## Shortest reviewed campaign workflow
 
-1. Review and commit the pending provenance, TPC-H compatibility, schema-check, campaign-evidence,
-   and report-gate changes so primary generation has a clean 40-character Git identity.
-2. Materialize and validate E-commerce revision v2 with `make research-data-ecommerce`.
-3. Materialize and validate TPC-H-derived SF1 with `make research-data-tpch`.
-4. Start Docker Desktop/WSL integration, then run the ten config validations and immutable research
-   plans after primary data generation is complete.
-5. Run all ten campaigns; every campaign must pass capacity, calibration, correctness,
-   complete-plan, snapshot, zero-swap, timeout, provenance, and raw-schema gates.
-6. Run strict `make report`, review the publishability artifact and fallback explanations, and only
-   then draw or publish performance conclusions.
+Run from Ubuntu/WSL with Docker Desktop integration, no competing workload, and a clean committed
+tree:
+
+1. Run `make lint test compose-config` on the final commit, then materialize and full-validate
+   E-commerce v3 with `make research-data-ecommerce`.
+2. Optionally run `make research-plan` to create/review the ten plans without starting campaigns.
+   It full-validates each of the two unique datasets once and publishes content-bound attestations.
+3. Run `make benchmark`. This includes the same suite preparation, so the shortest workflow does
+   **not** run `make validate-research` or `make research-plan` first. Existing current attestations
+   are verified rather than semantically rescanned.
+4. Run `make report`, then inspect `results/reports/report-publishability.json`. Draw or publish
+   performance conclusions only when it records `publishable: true`.
+
+All tracked code and documentation must be finalized before the first campaign. The strict report
+requires raw provenance to equal the current clean HEAD; a later tracked commit intentionally
+invalidates publication until matching campaign evidence is produced.
 
 SF10, a larger backlog catalog, multi-node scale-out, continuous operation, and audited TPC-H
-claims are outside the primary completion criterion.
+claims remain outside the primary completion criterion.

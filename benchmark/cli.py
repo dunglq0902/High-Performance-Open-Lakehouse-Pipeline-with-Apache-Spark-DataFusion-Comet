@@ -24,6 +24,8 @@ from benchmark.runner.config import (
     runtime_profile_paths,
     validate_smoke_runtime_profile,
 )
+from benchmark.runner.dataset_attestation import VerifiedDataset, verify_attestation
+from benchmark.runner.evidence import RepositoryEvidenceError, clean_git_commit
 from benchmark.runner.runtime import validate_runtime_lock
 from benchmark.runner.sql import render_sql
 from benchmark.runner.summary import summarize_records
@@ -56,7 +58,8 @@ def _validate_inputs(
     config: dict[str, Any],
     *,
     expected_python_version: str,
-) -> tuple[Path, Path, Path]:
+    dataset_attestation_path: Path | None = None,
+) -> tuple[Path, Path, Path, VerifiedDataset | None]:
     schema_dir = root / "benchmark/schemas"
     workload = config["workload"]
     sql_path = safe_repo_path(root, workload["sql_file"])
@@ -128,15 +131,16 @@ def _validate_inputs(
     if not isinstance(dataset, dict):
         raise ConfigurationError("dataset manifest root must be an object")
     if config_workload["suite"] == "tpch":
-        try:
-            source = load_source_lock(root / "runtime-versions.lock").as_manifest()
-            validate_tpch_dataset(
-                dataset_path.parent,
-                expected_source=source,
-                expected_python_version=expected_python_version,
-            )
-        except (TpchContractError, SourceProvenanceError) as error:
-            raise ConfigurationError(str(error)) from error
+        if dataset_attestation_path is None:
+            try:
+                source = load_source_lock(root / "runtime-versions.lock").as_manifest()
+                validate_tpch_dataset(
+                    dataset_path.parent,
+                    expected_source=source,
+                    expected_python_version=expected_python_version,
+                )
+            except (TpchContractError, SourceProvenanceError) as error:
+                raise ConfigurationError(str(error)) from error
         if dataset.get("scale_factor") != config_workload.get("scale_factor"):
             raise ConfigurationError("TPC-H dataset and experiment scale factors differ")
     else:
@@ -161,12 +165,26 @@ def _validate_inputs(
             raise ConfigurationError(
                 "dataset manifest schema validation failed:\n- " + "\n- ".join(messages)
             )
+        if dataset_attestation_path is None:
+            try:
+                validate_dataset(
+                    dataset_path.parent,
+                    expected_python_version=expected_python_version,
+                )
+            except DatasetValidationError as error:
+                raise ConfigurationError(str(error)) from error
+    verified_dataset: VerifiedDataset | None = None
+    if dataset_attestation_path is not None:
         try:
-            validate_dataset(
-                dataset_path.parent,
+            commit = clean_git_commit(root)
+            verified_dataset = verify_attestation(
+                root,
+                dataset_path,
+                dataset_attestation_path,
                 expected_python_version=expected_python_version,
+                expected_git_commit=commit,
             )
-        except DatasetValidationError as error:
+        except (RepositoryEvidenceError, ValueError) as error:
             raise ConfigurationError(str(error)) from error
     logical_tables = {
         binding["logical_table"] for binding in manifest["relation_bindings"].values()
@@ -178,7 +196,7 @@ def _validate_inputs(
         )
     if dataset_path.name != "manifest.json":
         raise ConfigurationError("generated dataset manifest must be named manifest.json")
-    return sql_path, manifest_path, dataset_path
+    return sql_path, manifest_path, dataset_path, verified_dataset
 
 
 def command_validate(args: argparse.Namespace) -> int:
@@ -209,10 +227,19 @@ def command_plan(args: argparse.Namespace) -> int:
     lock_path = root / "runtime-versions.lock"
     runtime_lock = validate_runtime_lock(lock_path, schema_dir / "runtime-lock.schema.json")
     components = {component["name"]: component for component in runtime_lock["components"]}
-    sql_path, workload_manifest_path, dataset_manifest_path = _validate_inputs(
+    raw_attestation = getattr(args, "dataset_attestation", None)
+    dataset_attestation_path = (
+        safe_repo_path(root, str(raw_attestation)) if raw_attestation is not None else None
+    )
+    if dataset_attestation_path is not None and not dataset_attestation_path.is_file():
+        raise ConfigurationError(
+            f"dataset validation attestation does not exist: {dataset_attestation_path}"
+        )
+    sql_path, workload_manifest_path, dataset_manifest_path, verified_dataset = _validate_inputs(
         root,
         config,
         expected_python_version=str(components["python"]["version"]),
+        dataset_attestation_path=dataset_attestation_path,
     )
     common_profile_path, comet_profile_path = runtime_profile_paths(config, root)
     manifest = build_experiment_manifest(
@@ -225,6 +252,7 @@ def command_plan(args: argparse.Namespace) -> int:
         uv_lock_path=root / "uv.lock",
         spark_defaults_path=common_profile_path,
         comet_profile_path=comet_profile_path,
+        dataset_validation=verified_dataset,
     )
     manifest_for_hash = deepcopy(manifest)
     declared_hash = manifest_for_hash.pop("manifest_sha256")
@@ -242,7 +270,15 @@ def command_plan(args: argparse.Namespace) -> int:
     output = safe_repo_path(
         root, args.output or f".artifacts/plans/{config['experiment']['id']}.json"
     )
-    write_json(output, manifest)
+    if output.is_file():
+        try:
+            existing = json.loads(output.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ConfigurationError(f"existing experiment plan is unreadable: {output}") from error
+        if existing != manifest:
+            raise ConfigurationError(f"existing immutable experiment plan differs: {output}")
+    else:
+        write_json(output, manifest)
     print(output)
     return 0
 
@@ -300,6 +336,10 @@ def parser() -> argparse.ArgumentParser:
     plan.add_argument("--config", required=True)
     plan.add_argument("--output")
     plan.add_argument("--root")
+    plan.add_argument(
+        "--dataset-attestation",
+        help="content-bound full-validation evidence used by suite preparation",
+    )
     plan.set_defaults(function=command_plan)
 
     analyze = subcommands.add_parser("analyze-plan", help="analyze a captured physical plan")
