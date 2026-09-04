@@ -13,13 +13,18 @@ from scripts.run_research_campaign import (
     ATTEMPT_ADMISSION_FILENAME,
     CALIBRATION_SCRIPT_PATH,
     COLLECTOR_PATH,
+    EVENT_LOG_CONTAINER_ROOT,
+    EVENT_LOG_STAGING_FILENAME,
     ROOT,
     DockerCampaignExecutor,
+    _archive_event_log_staging,
     _capacity_gate,
     _collector_calibration,
     _container_path,
+    _create_event_log_staging,
     _find_event_log,
     _make_event_logs_host_readable,
+    _native_event_log_base,
     _next_run_attempt_dir,
     _online_admission_failure,
     _prepare_medallion,
@@ -84,7 +89,8 @@ def test_event_log_lookup_accepts_spark_v2_directory(tmp_path: Path) -> None:
     assert _find_event_log("app-123", tmp_path) == event.resolve()
 
 
-def test_event_log_permissions_are_fixed_inside_running_container(
+def test_event_log_permissions_are_fixed_on_exact_staging_mount(
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[list[str]] = []
@@ -94,26 +100,35 @@ def test_event_log_permissions_are_fixed_inside_running_container(
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     monkeypatch.setattr("scripts.run_research_campaign._run", fake_run)
-    _make_event_logs_host_readable()
+    _make_event_logs_host_readable(tmp_path)
 
     assert calls == [
         [
             "docker",
             "compose",
-            "exec",
-            "-T",
+            "--profile",
+            "tools",
+            "run",
+            "--rm",
+            "--no-deps",
             "--user",
             "0",
-            "spark-master",
-            "chmod",
-            "-R",
-            "a+rX",
-            _container_path(ROOT / ".artifacts/spark-events"),
+            "--volume",
+            f"{tmp_path}:{EVENT_LOG_CONTAINER_ROOT}",
+            "--entrypoint",
+            "/bin/sh",
+            "spark-client",
+            "-c",
+            "set -eu; "
+            f'invalid="$(find {EVENT_LOG_CONTAINER_ROOT} ! -type f ! -type d -print -quit)"; '
+            'test -z "$invalid"; '
+            f"chmod -R a+rwX {EVENT_LOG_CONTAINER_ROOT}",
         ]
     ]
 
 
 def test_event_log_permission_failure_is_a_hard_collection_error(
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fail_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -121,7 +136,119 @@ def test_event_log_permission_failure_is_a_hard_collection_error(
 
     monkeypatch.setattr("scripts.run_research_campaign._run", fail_run)
     with pytest.raises(CampaignError, match="host-readable"):
-        _make_event_logs_host_readable()
+        _make_event_logs_host_readable(tmp_path)
+
+
+def _staged_logs_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    base = tmp_path / "native"
+    monkeypatch.setattr("scripts.run_research_campaign._native_event_log_base", lambda: base)
+    evidence = tmp_path / "attempt"
+    evidence.mkdir()
+    source = _create_event_log_staging(evidence, "lakehouse-bench-" + "a" * 16)
+    event = source / "eventlog_v2_app-123"
+    event.mkdir()
+    (event / "events_1_app-123").write_text("{}\n", encoding="utf-8")
+    return evidence, source
+
+
+def test_native_event_log_base_ignores_windows_backed_tmpdir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    assert _native_event_log_base().parent == Path("/tmp")
+
+
+def test_event_log_staging_archives_before_cleanup_and_preserves_pointer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    evidence, source = _staged_logs_case(tmp_path, monkeypatch)
+    pointer = (evidence / EVENT_LOG_STAGING_FILENAME).read_bytes()
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("scripts.run_research_campaign._run", fake_run)
+    archive = _archive_event_log_staging(evidence)
+
+    assert (archive / "eventlog_v2_app-123/events_1_app-123").read_bytes() == b"{}\n"
+    assert not source.exists()
+    assert (evidence / EVENT_LOG_STAGING_FILENAME).read_bytes() == pointer
+    assert b"/" not in pointer
+    assert calls[0][:3] == ["docker", "container", "ls"]
+    assert calls[1][calls[1].index("--volume") + 1] == (f"{source}:{EVENT_LOG_CONTAINER_ROOT}")
+    assert _archive_event_log_staging(evidence) == archive
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("token", ["../outside", "/tmp/outside", "events-wrong-12345678"])
+def test_event_log_staging_rejects_unsafe_recovery_tokens_before_root_helper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, token: str
+) -> None:
+    evidence, source = _staged_logs_case(tmp_path, monkeypatch)
+    pointer = evidence / EVENT_LOG_STAGING_FILENAME
+    value = json.loads(pointer.read_text(encoding="utf-8"))
+    value["token"] = token
+    pointer.write_text(json.dumps(value), encoding="utf-8")
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._run", lambda *_args, **_kwargs: pytest.fail("root helper")
+    )
+    with pytest.raises(CampaignError, match="token"):
+        _archive_event_log_staging(evidence)
+    assert source.is_dir()
+
+
+def test_event_log_staging_rejects_symlink_target_before_root_helper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    evidence, source = _staged_logs_case(tmp_path, monkeypatch)
+    renamed = source.with_name(source.name + "-saved")
+    source.rename(renamed)
+    source.symlink_to(renamed, target_is_directory=True)
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._run", lambda *_args, **_kwargs: pytest.fail("root helper")
+    )
+    with pytest.raises(CampaignError, match="owned, contained"):
+        _archive_event_log_staging(evidence)
+    assert renamed.is_dir()
+
+
+def test_event_log_staging_rejects_nonprivate_native_base(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = tmp_path / "native"
+    base.mkdir(mode=0o777)
+    base.chmod(0o777)
+    monkeypatch.setattr("scripts.run_research_campaign._native_event_log_base", lambda: base)
+    with pytest.raises(CampaignError, match="private"):
+        _create_event_log_staging(tmp_path, "lakehouse-bench-" + "a" * 16)
+    assert not list(base.iterdir())
+
+
+@pytest.mark.parametrize("failure", ["running", "permission", "copy"])
+def test_event_log_staging_failure_preserves_original_for_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    evidence, source = _staged_logs_case(tmp_path, monkeypatch)
+    pointer = (evidence / EVENT_LOG_STAGING_FILENAME).read_bytes()
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        if "--user" in command and failure == "permission":
+            raise subprocess.CalledProcessError(1, command)
+        return subprocess.CompletedProcess(
+            command, 0, stdout="running\n" if failure == "running" else "", stderr=""
+        )
+
+    monkeypatch.setattr("scripts.run_research_campaign._run", fake_run)
+    if failure == "copy":
+        (evidence / "spark-events-copying").mkdir()
+        (evidence / "spark-events-copying/partial").write_bytes(b"preserve partial evidence")
+    with pytest.raises(CampaignError):
+        _archive_event_log_staging(evidence)
+    assert (source / "eventlog_v2_app-123/events_1_app-123").read_bytes() == b"{}\n"
+    assert (evidence / EVENT_LOG_STAGING_FILENAME).read_bytes() == pointer
+    assert not (evidence / "spark-events").exists()
 
 
 def test_submit_command_uses_locked_profile_and_only_comet_deltas(tmp_path: Path) -> None:
@@ -141,7 +268,9 @@ def test_submit_command_uses_locked_profile_and_only_comet_deltas(tmp_path: Path
     )
     medallion = ROOT / ".artifacts/test/medallion.json"
     output = ROOT / ".artifacts/test/application.json"
-    command = _spark_submit_command(config, run, medallion, output)
+    command = _spark_submit_command(config, run, medallion, output, event_log_staging=tmp_path)
+    assert command[command.index("--volume") + 1] == f"{tmp_path}:{EVENT_LOG_CONTAINER_ROOT}"
+    assert "--user" not in command
     assert "--properties-file" in command
     assert any(value == "spark.comet.enabled=true" for value in command)
     assert "--pair-index" in command
@@ -755,6 +884,28 @@ def test_docker_executor_hard_stops_unreconciled_application_result(
     assert application_path.read_bytes() == application_bytes
 
 
+def test_interrupted_native_staging_is_archived_without_relaxing_result_hard_stop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    executor, run, first, failure_root, raw_path = _interrupted_recovery_case(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._native_event_log_base", lambda: tmp_path / "native"
+    )
+    source = _create_event_log_staging(first, "lakehouse-bench-" + "a" * 16)
+    (source / "events").write_bytes(b"completed before interruption")
+    (first / "application-result.json").write_text("{", encoding="utf-8")
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 0, stdout="", stderr=""),
+    )
+    executor.recover_interrupted_attempt(run, raw_path=raw_path, failure_root=failure_root)
+    failure = json.loads(next(failure_root.rglob("*.json")).read_text(encoding="utf-8"))
+    assert failure["status"] == "invalid_result"
+    assert failure["failure"]["class"] == "UnreconciledApplicationResult"
+    assert (first / "spark-events/events").read_bytes() == b"completed before interruption"
+    assert not source.exists()
+
+
 def test_existing_medallion_must_bind_current_dataset_and_attestation(
     tmp_path: Path,
 ) -> None:
@@ -794,6 +945,103 @@ def test_existing_medallion_must_bind_current_dataset_and_attestation(
             dataset_attestation=attestation,
             expected_git_commit="a" * 40,
         )
+
+
+@pytest.mark.parametrize("failure", [None, "timeout", "failed"])
+def test_medallion_uses_nonroot_native_staging_and_archives_failed_logs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str | None
+) -> None:
+    monkeypatch.setattr("scripts.run_research_campaign._container_path", lambda path: str(path))
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._native_event_log_base", lambda: tmp_path / "native"
+    )
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{}\n", encoding="utf-8")
+    config = {"workload": {"dataset_manifest": str(manifest)}}
+    output = tmp_path / "medallion.json"
+    submitted: list[list[str]] = []
+    stopped: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        if "/opt/spark/bin/spark-submit" in command:
+            submitted.append(command)
+            source = Path(command[command.index("--volume") + 1].split(":")[0])
+            (source / "application-event").write_bytes(b"preserved Spark event")
+            if failure == "timeout":
+                raise subprocess.TimeoutExpired(command, 3600)
+            if failure == "failed":
+                raise subprocess.CalledProcessError(1, command)
+            output.write_text("{}\n", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    def fake_stop(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        stopped.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("scripts.run_research_campaign._run", fake_run)
+    monkeypatch.setattr("scripts.run_research_campaign.subprocess.run", fake_stop)
+    if failure is None:
+        _prepare_medallion(config, output)
+    else:
+        with pytest.raises(subprocess.SubprocessError):
+            _prepare_medallion(config, output)
+    assert len(submitted) == 1
+    command = submitted[0]
+    assert "--user" not in command
+    assert command[command.index("--volume") + 1].endswith(f":{EVENT_LOG_CONTAINER_ROOT}")
+    event_dir = next((tmp_path / "medallion-event-logs").iterdir())
+    assert (event_dir / "spark-events/application-event").read_bytes() == b"preserved Spark event"
+    if failure == "timeout":
+        assert stopped == [["docker", "rm", "-f", command[command.index("--name") + 1]]]
+    else:
+        assert stopped == []
+
+
+@pytest.mark.parametrize("audit_exists", [False, True])
+def test_medallion_reconciles_previous_active_client_before_reuse_or_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, audit_exists: bool
+) -> None:
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._native_event_log_base", lambda: tmp_path / "native"
+    )
+    output = tmp_path / "medallion.json"
+    if audit_exists:
+        output.write_text("{}\n", encoding="utf-8")
+    event_dir = tmp_path / "medallion-event-logs/attempt-12345678"
+    event_dir.mkdir(parents=True)
+    source = _create_event_log_staging(event_dir, "lakehouse-medallion-" + "a" * 16)
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="running\n", stderr="")
+
+    monkeypatch.setattr("scripts.run_research_campaign._run", fake_run)
+    with pytest.raises(CampaignError, match="still active"):
+        _prepare_medallion({}, output)
+    assert len(calls) == 1
+    assert calls[0][:3] == ["docker", "container", "ls"]
+    assert source.is_dir()
+
+
+def test_medallion_does_not_retry_possibly_partial_build_without_audit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._native_event_log_base", lambda: tmp_path / "native"
+    )
+    event_dir = tmp_path / "medallion-event-logs/attempt-12345678"
+    event_dir.mkdir(parents=True)
+    source = _create_event_log_staging(event_dir, "lakehouse-medallion-" + "a" * 16)
+    (source / "events").write_bytes(b"interrupted build")
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 0, stdout="", stderr=""),
+    )
+    with pytest.raises(CampaignError, match="partial table build"):
+        _prepare_medallion({}, tmp_path / "medallion.json")
+    assert (event_dir / "spark-events/events").read_bytes() == b"interrupted build"
+    assert len(list(event_dir.parent.iterdir())) == 1
 
 
 def test_campaign_verification_is_idempotent_across_resume_attempts(tmp_path: Path) -> None:

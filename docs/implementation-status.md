@@ -56,9 +56,13 @@ publishable.
   collector calibration, Medallion audit, and every referenced event log, plan, resource sample,
   stdout, and stderr file. A successful resume records executed/resumed and total/failed-attempt
   counters without overwriting earlier evidence.
-- Spark 4 rolling event-log V2 directories are collected after a fail-closed container-side
-  permission handoff. Benchmark profiles explicitly disable event-log compression so the strict
-  dependency-free JSON parser consumes the exact emitted segments.
+- Spark 4 rolling event-log V2 directories use a separate native Linux temporary mount for each
+  Medallion or campaign application, avoiding the Windows/WSL bind-mount `chmod` failure while
+  keeping Spark non-root and its event-log configuration unchanged. After the client stops, a
+  scoped container-side permission handoff precedes immutable archival into that attempt's evidence
+  tree. An archival failure retains the native logs and recovery pointer and blocks admission;
+  retries do not overwrite earlier event logs. Benchmark profiles explicitly disable event-log
+  compression so the strict dependency-free JSON parser consumes the exact emitted segments.
 - Spark event-log attribution by measured `jobGroupId`, 200-ms worker/driver resource sampling,
   collector calibration below 2%, conservative final-AQE plan analysis, exact result hashes,
   descriptive statistics, paired speedups/resources, and deterministic bootstrap 95% CIs.
@@ -80,6 +84,10 @@ gate. The native readiness evidence remains:
   `d0d92c4191c776bcc7bce84e0d2156c3a744c115fb9a9ccbcaac908313708c96`; its DBGEN target builds
   successfully with the reviewed command.
 - A real Spark analyzer run confirmed the expected schemas for Q01, Q03, Q06, and Q12.
+- On 2026-09-04, a default non-root Spark client completed a local count query with the benchmark
+  event-log settings and the native staging mount. Its rolling V2 log was archived and rediscovered
+  successfully; `.artifacts/diagnostics/spark-event-log-probe-20260904/verification.json` records this
+  readiness check. It is not research performance evidence.
 
 ## Primary data state
 

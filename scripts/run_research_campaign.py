@@ -61,6 +61,8 @@ EXPERIMENT_SCHEMA_PATH = ROOT / "benchmark/schemas/experiment-config.schema.json
 WORKLOAD_SCHEMA_PATH = ROOT / "benchmark/schemas/workload-manifest.schema.json"
 LOCK_PATH = ROOT / "runtime-versions.lock"
 EVENT_LOG_ROOT = ROOT / ".artifacts/spark-events"
+EVENT_LOG_CONTAINER_ROOT = "/opt/lakehouse/.artifacts/spark-events"
+EVENT_LOG_STAGING_FILENAME = "event-log-staging.json"
 COLLECTOR_PATH = ROOT / "benchmark/collectors/resources.py"
 CALIBRATION_SCRIPT_PATH = ROOT / "scripts/calibrate_resource_collector.py"
 SERVICE_EXPECTATIONS = {
@@ -438,7 +440,12 @@ def _cpu_model() -> str:
 
 
 def _spark_submit_command(
-    config: dict[str, Any], run: CampaignRun, medallion_path: Path, output_path: Path
+    config: dict[str, Any],
+    run: CampaignRun,
+    medallion_path: Path,
+    output_path: Path,
+    *,
+    event_log_staging: Path,
 ) -> list[str]:
     container_name = "lakehouse-bench-" + hashlib.sha256(run.run_id.encode()).hexdigest()[:16]
     command = [
@@ -451,6 +458,8 @@ def _spark_submit_command(
         "--no-deps",
         "--name",
         container_name,
+        "--volume",
+        f"{event_log_staging}:{EVENT_LOG_CONTAINER_ROOT}",
         "--entrypoint",
         "/opt/spark/bin/spark-submit",
         "spark-client",
@@ -523,28 +532,127 @@ def _find_event_log(application_id: str, source_root: Path = EVENT_LOG_ROOT) -> 
     return logical[0]
 
 
-def _make_event_logs_host_readable() -> None:
-    """Use the running Spark container's root user to expose UID-185 event logs to WSL."""
+def _native_event_log_base() -> Path:
+    """Ignore TMPDIR: a repository or Windows-backed temporary directory cannot chmod."""
+
+    if os.name == "nt":
+        raise CampaignError("native event-log staging requires Linux/WSL")
+    return Path("/tmp") / f"lakehouse-campaign-events-{os.getuid()}"
+
+
+def _event_log_staging_path(evidence_dir: Path, token: str) -> Path:
+    identity = hashlib.sha256(str(evidence_dir.resolve()).encode()).hexdigest()[:16]
+    if re.fullmatch(rf"events-{identity}-[a-z0-9_]{{8}}", token) is None:
+        raise CampaignError("invalid native event-log staging token")
+    base = _native_event_log_base()
+    source = base / token
+    if (
+        base.is_symlink()
+        or not base.is_dir()
+        or base.stat().st_uid != os.getuid()
+        or base.stat().st_mode & 0o077
+        or source.is_symlink()
+        or not source.is_dir()
+        or source.stat().st_uid != os.getuid()
+        or source.resolve().parent != base.resolve()
+    ):
+        raise CampaignError("native event-log staging is not an owned, contained directory")
+    return source
+
+
+def _create_event_log_staging(evidence_dir: Path, container_name: str) -> Path:
+    base = _native_event_log_base()
+    base.mkdir(mode=0o700, exist_ok=True)
+    if base.is_symlink() or base.stat().st_uid != os.getuid() or base.stat().st_mode & 0o077:
+        raise CampaignError("native event-log staging base must be private and user-owned")
+    identity = hashlib.sha256(str(evidence_dir.resolve()).encode()).hexdigest()[:16]
+    source = Path(tempfile.mkdtemp(prefix=f"events-{identity}-", dir=base))
+    source.chmod(0o777)
+    _event_log_staging_path(evidence_dir, source.name)
+    write_json(
+        evidence_dir / EVENT_LOG_STAGING_FILENAME,
+        {"schema_version": 1, "token": source.name, "container_name": container_name},
+    )
+    return source
+
+
+def _make_event_logs_host_readable(source: Path) -> None:
+    """Handoff only this stopped client's native staging mount, never a repository tree."""
 
     try:
         _run(
             [
                 "docker",
                 "compose",
-                "exec",
-                "-T",
+                "--profile",
+                "tools",
+                "run",
+                "--rm",
+                "--no-deps",
                 "--user",
                 "0",
-                "spark-master",
-                "chmod",
-                "-R",
-                "a+rX",
-                _container_path(EVENT_LOG_ROOT),
+                "--volume",
+                f"{source}:{EVENT_LOG_CONTAINER_ROOT}",
+                "--entrypoint",
+                "/bin/sh",
+                "spark-client",
+                "-c",
+                # Check the whole tree as root before chmod: UID-185 directories may not yet
+                # be traversable by the host. Never dereference links or copy special files.
+                "set -eu; "
+                f'invalid="$(find {EVENT_LOG_CONTAINER_ROOT} ! -type f ! -type d -print -quit)"; '
+                'test -z "$invalid"; '
+                f"chmod -R a+rwX {EVENT_LOG_CONTAINER_ROOT}",
             ],
             timeout=30,
         )
     except subprocess.SubprocessError as error:
         raise CampaignError("failed to make Spark event logs host-readable") from error
+
+
+def _archive_event_log_staging(evidence_dir: Path) -> Path:
+    """Copy stopped application logs before removing their validated native temporary tree.
+
+    A crash, active container, permission error, or partial archive leaves the original logs and
+    the immutable recovery token intact. An interrupted copy is intentionally not overwritten.
+    """
+
+    archive = evidence_dir / "spark-events"
+    if archive.exists():
+        if archive.is_symlink() or not archive.is_dir():
+            raise CampaignError("event-log archive is not a real directory")
+        return archive
+    pointer = json.loads((evidence_dir / EVENT_LOG_STAGING_FILENAME).read_text(encoding="utf-8"))
+    if not isinstance(pointer, dict) or pointer.get("schema_version") != 1:
+        raise CampaignError("invalid event-log staging recovery pointer")
+    token, container_name = pointer.get("token"), pointer.get("container_name")
+    if not isinstance(token, str) or not isinstance(container_name, str):
+        raise CampaignError("incomplete event-log staging recovery pointer")
+    if re.fullmatch(r"lakehouse-(?:bench|medallion)-[a-f0-9]{16}", container_name) is None:
+        raise CampaignError("invalid event-log staging container identity")
+    source = _event_log_staging_path(evidence_dir, token)
+    states = _run(
+        [
+            "docker",
+            "container",
+            "ls",
+            "--all",
+            "--filter",
+            f"name=^/{container_name}$",
+            "--format",
+            "{{.State}}",
+        ],
+        timeout=30,
+    ).stdout.splitlines()
+    if any(state not in {"exited", "dead"} for state in states):
+        raise CampaignError(f"event-log client is still active; native staging retained: {source}")
+    _make_event_logs_host_readable(source)
+    copying = evidence_dir / "spark-events-copying"
+    _copy_event_log(source, copying)
+    copying.rename(archive)
+    # Revalidate the exact owned temporary target immediately before recursive cleanup.
+    shutil.rmtree(_event_log_staging_path(evidence_dir, token))
+    return archive
 
 
 def _copy_event_log(source: Path, destination: Path) -> Path:
@@ -1184,6 +1292,28 @@ def _prepare_medallion(
     dataset_attestation: Path | None = None,
     expected_git_commit: str | None = None,
 ) -> None:
+    event_root = output.parent / f"{output.stem}-event-logs"
+    prior_attempt = False
+    if event_root.exists() or event_root.is_symlink():
+        if event_root.is_symlink() or not event_root.is_dir():
+            raise CampaignError("Medallion event-log attempt root is not a real directory")
+        for event_dir in sorted(event_root.iterdir()):
+            if (
+                event_dir.is_symlink()
+                or not event_dir.is_dir()
+                or re.fullmatch(r"attempt-[a-z0-9_]{8}", event_dir.name) is None
+            ):
+                raise CampaignError("Medallion event-log root contains unexpected evidence")
+            if (event_dir / EVENT_LOG_STAGING_FILENAME).is_file():
+                _archive_event_log_staging(event_dir)
+                prior_attempt = True
+            elif any(event_dir.iterdir()):
+                raise CampaignError("Medallion event-log attempt has no recovery pointer")
+    if prior_attempt and not output.is_file():
+        raise CampaignError(
+            "prior Medallion attempt has no audit; automatically retrying a partial table build "
+            "is unsafe"
+        )
     dataset_manifest = ROOT / config["workload"]["dataset_manifest"]
     expected_manifest_hash = sha256_file(dataset_manifest)
     expected_attestation_hash = (
@@ -1198,6 +1328,12 @@ def _prepare_medallion(
         ):
             return
         raise CampaignError(f"existing Medallion artifact identity differs: {output}")
+    _shared_directory(event_root)
+    event_dir = Path(tempfile.mkdtemp(prefix="attempt-", dir=event_root))
+    container_name = (
+        "lakehouse-medallion-" + hashlib.sha256(str(event_dir).encode()).hexdigest()[:16]
+    )
+    event_log_staging = _create_event_log_staging(event_dir, container_name)
     command = [
         "docker",
         "compose",
@@ -1206,6 +1342,10 @@ def _prepare_medallion(
         "run",
         "--rm",
         "--no-deps",
+        "--name",
+        container_name,
+        "--volume",
+        f"{event_log_staging}:{EVENT_LOG_CONTAINER_ROOT}",
         "--entrypoint",
         "/opt/spark/bin/spark-submit",
         "spark-client",
@@ -1228,7 +1368,21 @@ def _prepare_medallion(
                 expected_git_commit,
             ]
         )
-    outcome = _run(command, timeout=3600, capture=False)
+    try:
+        outcome = _run(command, timeout=3600, capture=False)
+    except subprocess.TimeoutExpired:
+        subprocess.run(
+            ["docker", "rm", "-f", container_name],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+        )
+        _archive_event_log_staging(event_dir)
+        raise
+    except subprocess.CalledProcessError:
+        _archive_event_log_staging(event_dir)
+        raise
+    _archive_event_log_staging(event_dir)
     if outcome.returncode != 0 or not output.is_file():
         raise CampaignError("Medallion build did not produce its audit artifact")
 
@@ -1407,6 +1561,10 @@ class DockerCampaignExecutor:
         attempt, run_dir = attempts[-1]
         application_path = run_dir / "application-result.json"
         has_application_result = application_path.exists() or application_path.is_symlink()
+        if (run_dir / EVENT_LOG_STAGING_FILENAME).is_file():
+            # Do not read/alter a still-running driver's logs or overwrite a partial copy.
+            # Existing application results still take the hard-stop path below after archival.
+            _archive_event_log_staging(run_dir)
         for path in (
             run_dir / "stdout.log",
             run_dir / "stderr.log",
@@ -1459,10 +1617,17 @@ class DockerCampaignExecutor:
         application_path = run_dir / "application-result.json"
         worker_sampler: WorkerSamplerHandle | None = None
         try:
+            event_log_staging = _create_event_log_staging(run_dir, _container_name(run))
             worker_sampler = _start_worker_sampler(run_dir, run.timeout_seconds)
             try:
                 outcome = run_subprocess(
-                    _spark_submit_command(self.config, run, self.medallion_path, application_path),
+                    _spark_submit_command(
+                        self.config,
+                        run,
+                        self.medallion_path,
+                        application_path,
+                        event_log_staging=event_log_staging,
+                    ),
                     timeout_seconds=run.timeout_seconds,
                     stdout_path=run_dir / "stdout.log",
                     stderr_path=run_dir / "stderr.log",
@@ -1472,6 +1637,25 @@ class DockerCampaignExecutor:
                 _stop_worker_sampler(worker_sampler)
         except (CampaignError, OSError, subprocess.SubprocessError) as error:
             context = self._context(run, run_dir, event_log=None, executor_resources=None)
+            if (run_dir / EVENT_LOG_STAGING_FILENAME).is_file():
+                try:
+                    _archive_event_log_staging(run_dir)
+                except (
+                    CampaignError,
+                    OSError,
+                    ValueError,
+                    subprocess.SubprocessError,
+                ) as archive_error:
+                    return self._failure(
+                        run,
+                        context,
+                        status="invalid_environment",
+                        failure_class=type(archive_error).__name__,
+                        message=(
+                            f"benchmark launcher failed: {error}; "
+                            f"native event-log staging retained: {archive_error}"
+                        ),
+                    )
             return self._failure(
                 run,
                 context,
@@ -1490,6 +1674,24 @@ class DockerCampaignExecutor:
                     redact_file(path, self.secrets)
 
         assert worker_sampler is not None
+        if outcome.timed_out:
+            subprocess.run(
+                ["docker", "rm", "-f", _container_name(run)],
+                cwd=ROOT,
+                capture_output=True,
+                check=False,
+            )
+        try:
+            event_log_archive = _archive_event_log_staging(run_dir)
+        except (CampaignError, OSError, ValueError, subprocess.SubprocessError) as error:
+            context = self._context(run, run_dir, event_log=None, executor_resources=None)
+            return self._failure(
+                run,
+                context,
+                status="invalid_environment",
+                failure_class=type(error).__name__,
+                message=f"Spark event-log archival failed; native staging retained: {error}",
+            )
         try:
             resources = _resource_summary(worker_sampler.output)
         except (OSError, ValueError, json.JSONDecodeError) as error:
@@ -1503,13 +1705,6 @@ class DockerCampaignExecutor:
             )
         context = self._context(run, run_dir, event_log=None, executor_resources=resources)
         if outcome.timed_out:
-            container = _container_name(run)
-            subprocess.run(
-                ["docker", "rm", "-f", container],
-                cwd=ROOT,
-                capture_output=True,
-                check=False,
-            )
             return self._failure(
                 run,
                 context,
@@ -1553,8 +1748,7 @@ class DockerCampaignExecutor:
                 message="application result has no Spark application ID",
             )
         try:
-            _make_event_logs_host_readable()
-            source_event_log = _find_event_log(application_id)
+            source_event_log = _find_event_log(application_id, event_log_archive)
             copied_event_log = _copy_event_log(source_event_log, run_dir / "event-log")
         except (CampaignError, OSError, subprocess.SubprocessError) as error:
             return self._failure(
