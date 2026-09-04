@@ -13,7 +13,13 @@ from pathlib import Path
 from benchmark.cli import command_plan
 from benchmark.runner.canonical import sha256_file
 from benchmark.runner.config import load_experiment, validate_runtime_profile
-from benchmark.runner.dataset_attestation import create_attestation, verify_attestation
+from benchmark.runner.dataset_attestation import (
+    DatasetAttestationNotReusable,
+    create_attestation,
+    discover_full_attestation_origins,
+    rebind_attestation,
+    verify_attestation,
+)
 from benchmark.runner.evidence import clean_git_commit
 from benchmark.runner.runtime import validate_runtime_lock
 
@@ -80,8 +86,52 @@ def _locked_python_version() -> str:
     return str(components["python"]["version"])
 
 
+def _ensure_dataset_attestation(
+    repository_root: Path,
+    dataset_manifest: Path,
+    *,
+    commit: str,
+    expected_python_version: str,
+) -> Path:
+    manifest_sha256 = sha256_file(dataset_manifest)
+    output = repository_root / ".artifacts/dataset-validations" / commit / f"{manifest_sha256}.json"
+    if output.is_file():
+        verify_attestation(
+            repository_root,
+            dataset_manifest,
+            output,
+            expected_python_version=expected_python_version,
+            expected_git_commit=commit,
+        )
+        return output
+
+    for origin in discover_full_attestation_origins(repository_root, dataset_manifest, commit):
+        try:
+            rebind_attestation(
+                repository_root,
+                dataset_manifest,
+                origin,
+                output,
+                expected_python_version=expected_python_version,
+                git_commit=commit,
+            )
+        except DatasetAttestationNotReusable as error:
+            print(f"Rejected dataset attestation origin {origin}: {error}", file=sys.stderr)
+            continue
+        return output
+
+    create_attestation(
+        repository_root,
+        dataset_manifest,
+        output,
+        expected_python_version=expected_python_version,
+        git_commit=commit,
+    )
+    return output
+
+
 def prepare_suite(configs: tuple[str, ...]) -> tuple[PreparedCampaign, ...]:
-    """Full-validate each unique dataset once, then materialize all immutable plans."""
+    """Validate or exactly rebind each unique dataset, then materialize immutable plans."""
 
     commit = clean_git_commit(ROOT)
     expected_python_version = _locked_python_version()
@@ -115,26 +165,12 @@ def prepare_suite(configs: tuple[str, ...]) -> tuple[PreparedCampaign, ...]:
             raise ValueError(f"research dataset is missing: {dataset_manifest}")
         attestation_path = attestations.get(dataset_manifest)
         if attestation_path is None:
-            manifest_sha256 = sha256_file(dataset_manifest)
-            attestation_path = (
-                ROOT / ".artifacts/dataset-validations" / commit / f"{manifest_sha256}.json"
+            attestation_path = _ensure_dataset_attestation(
+                ROOT,
+                dataset_manifest,
+                commit=commit,
+                expected_python_version=expected_python_version,
             )
-            if attestation_path.is_file():
-                verify_attestation(
-                    ROOT,
-                    dataset_manifest,
-                    attestation_path,
-                    expected_python_version=expected_python_version,
-                    expected_git_commit=commit,
-                )
-            else:
-                create_attestation(
-                    ROOT,
-                    dataset_manifest,
-                    attestation_path,
-                    expected_python_version=expected_python_version,
-                    git_commit=commit,
-                )
             attestations[dataset_manifest] = attestation_path
 
         experiment = loaded["experiment"]

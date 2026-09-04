@@ -435,12 +435,15 @@ def _validate_source_dataset(
             root / "benchmark/schemas/runtime-lock.schema.json",
         )
         components = {component["name"]: component for component in runtime_lock["components"]}
+        # Host plan creation proves Git lineage and binds this receipt's hash. The image has
+        # no Git database; it still verifies all runtime/content and direct-origin bindings.
         verify_attestation(
             root,
             manifest_path,
             attestation_path,
             expected_python_version=str(components["python"]["version"]),
             expected_git_commit=str(expected_git_commit),
+            require_git_lineage=False,
         )
         return sha256_file(attestation_path)
     if tpch_dataset:

@@ -1,7 +1,7 @@
-# Implementation status — 2026-08-31
+# Implementation status — 2026-09-04
 
-The research software and primary TPC-H dataset are implemented and materialized. The primary
-E-commerce profile has moved to revision v3 and must be materialized from the final clean commit.
+The research software and both primary datasets are implemented and materialized. The primary
+E-commerce dataset is revision v3, generated from a reviewed clean generator commit.
 The empirical publication state is deliberately not hard-coded in this document: it is determined
 by `results/reports/report-publishability.json`, rebuilt from the current immutable campaign
 evidence. Unless that artifact exists and contains `publishable: true`, no performance claim is
@@ -25,9 +25,15 @@ publishable.
 - Content-bound dataset validation attestations. Suite preparation performs the expensive semantic
   validation once per unique dataset, then binds the result to the clean Git commit, locked Python
   and PyArrow runtimes, runtime lock, manifest bytes, and the SHA-256/size/row inventory of every
-  current Parquet file. Reuse rehashes the physical inventory and fails closed on drift. This is a
-  trusted-local-workspace cache receipt, not a cryptographic signature or external attestation;
-  strict publication independently verifies the receipt and current physical inventory.
+  current Parquet file. V2 receipts may rebind only from a full receipt at an ancestor commit when
+  the suite-specific semantic-validator Git tree and every runtime/content identity are unchanged;
+  TPC-H also rehashes all eight source `.tbl` files, and rebound receipts cannot form a chain. This
+  is a trusted-local-workspace cache receipt, not a cryptographic signature or external
+  attestation; strict publication independently verifies the receipt, lineage, and current physical
+  inventory. Receipts are verified in staging before immutable publication; Git provenance rejects
+  replacement refs, grafts, and inherited repository redirects. The Spark container rechecks the
+  host-bound content/runtime/origin evidence without requiring a mounted Git object database;
+  host preparation and strict reporting always resolve the actual Git lineage.
 - E-commerce Bronze/Silver/Gold Iceberg pipeline and TPC-H-to-Iceberg import with explicit
   `NOT NULL` schemas, persisted counts, source-manifest/attestation binding, and pinned snapshot IDs.
   For one clean commit, Spark image, persistent Docker-volume identity, dataset, and attestation,
@@ -81,15 +87,16 @@ The configured primary datasets currently have these states:
 
 | Dataset | Rows | Parquet files | Parquet bytes | Generator provenance |
 |---|---:|---:|---:|---|
-| `ecommerce-small-uniform-seed-20260827-v3` | 10,110,000 planned | 18 planned | pending generation | must be generated from final clean commit with CPython 3.12.13 |
+| `ecommerce-small-uniform-seed-20260827-v3` | 10,110,000 | 18 | 241,845,093 | generator v1.0.0, clean `701883a6e8977310986d7e0cba26cae498d7b340`, CPython 3.12.13/PyArrow 21.0.0 |
 | `tpch-derived-sf1-852ad0a5ee31-v1` | 8,661,245 | 9 | 370,681,574 | generator v1.0.2, clean `be0a4981ab047a6d8b3926cb818be1b2932e8f5c`, CPython 3.12.13 |
 
 E-commerce v3 keeps 100,000 customers, 10,000 products, 1,000,000 orders, 4,000,000 order items,
 and 5,000,000 events. Its physical change raises the `order_items` target from 500,000 to 1,000,000
 rows per file, reducing that table from eight to four Parquet files. The generator contract now
 rejects a benchmark-eligible profile that reintroduces the fragmented target. All six core
-E-commerce configs point to v3; no campaign may start until its immutable manifest exists and full
-content validation passes.
+E-commerce configs point to v3. Its 18 Parquet files total 241,845,093 bytes, all 16 fact files are
+larger than 8 MiB, and the manifest file SHA-256 is
+`05ab005cc05d6c95cf7e976d2ece4c7a2e6b07efa7d329a5d893d1b156686bce`.
 
 TPC-H-derived SF1 contains 25 nations, 5 regions, 10,000 suppliers, 150,000 customers, 200,000
 parts, 800,000 partsupp rows, 1,500,000 orders, and 6,001,215 lineitems. Its manifest file SHA-256
@@ -100,8 +107,10 @@ source commit `852ad0a5ee31ebefeed884cea4188781dd9613a3` and archive SHA-256
 `.tbl` inputs total 1,092,031,885 bytes.
 
 Dataset attestations and experiment plans are generated for the current clean control-plane commit,
-not for the older generator commits. A changed commit, runtime lock, manifest, runtime, or Parquet
-file invalidates reuse and requires a new attestation.
+not for the older generator commits. Every changed commit requires a new canonical outer
+attestation. A v2 receipt may avoid repeating the semantic scan only when its full origin is an
+ancestor and the semantic-validator Git tree, runtime lock/runtime, manifest, Parquet inventory and
+TPC-H source inventory remain exact; otherwise preparation falls back to full validation.
 
 ## Native evidence and its boundary
 
@@ -120,10 +129,11 @@ the latest strict report publishability artifact may make that determination.
 Run from Ubuntu/WSL with Docker Desktop integration, no competing workload, and a clean committed
 tree:
 
-1. Run `make lint test compose-config` on the final commit, then materialize and full-validate
+1. Run `make lint test compose-config` on the final commit, then verify (or materialize when absent)
    E-commerce v3 with `make research-data-ecommerce`.
 2. Optionally run `make research-plan` to create/review the ten plans without starting campaigns.
-   It full-validates each of the two unique datasets once and publishes content-bound attestations.
+   It full-validates a dataset without a reusable origin, or exact-rebinds a reviewed full receipt,
+   and publishes content-bound attestations for the current clean commit.
 3. Run `make benchmark`. This includes the same suite preparation, so the shortest workflow does
    **not** run `make validate-research` or `make research-plan` first. Existing current attestations
    are verified rather than semantically rescanned.

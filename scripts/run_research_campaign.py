@@ -700,13 +700,11 @@ def _online_admission_failure(
             "final physical-plan analysis is not complete",
         )
     metrics = record.get("metrics")
-    if run.phase == "measurement" and (
-        not isinstance(metrics, Mapping) or metrics.get("collector_status") != "complete"
-    ):
+    if not isinstance(metrics, Mapping) or metrics.get("collector_status") != "complete":
         return (
             "invalid_environment",
             "IncompleteResourceEvidence",
-            "measurement resource collectors did not complete",
+            "run resource collectors did not complete",
         )
     return None
 
@@ -1407,6 +1405,8 @@ class DockerCampaignExecutor:
             )
 
         attempt, run_dir = attempts[-1]
+        application_path = run_dir / "application-result.json"
+        has_application_result = application_path.exists() or application_path.is_symlink()
         for path in (
             run_dir / "stdout.log",
             run_dir / "stderr.log",
@@ -1426,12 +1426,23 @@ class DockerCampaignExecutor:
             event_log=event_log if event_log.exists() else None,
             executor_resources=resources,
         )
+        if has_application_result:
+            status = "invalid_result"
+            failure_class = "UnreconciledApplicationResult"
+            message = (
+                "application-result.json exists without terminal raw record publication; "
+                "automatic retry is unsafe"
+            )
+        else:
+            status = "failed"
+            failure_class = "InterruptedAttempt"
+            message = "admitted benchmark attempt ended before terminal record publication"
         record = self._failure(
             run,
             context,
-            status="failed",
-            failure_class="InterruptedAttempt",
-            message="admitted benchmark attempt ended before terminal record publication",
+            status=status,
+            failure_class=failure_class,
+            message=message,
         )
         write_json(
             failure_directory / f"{run.run_id}-attempt-{attempt:04d}.json",

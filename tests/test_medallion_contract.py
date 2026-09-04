@@ -92,6 +92,7 @@ def test_attested_medallion_import_uses_quick_verifier_not_full_scan(
         *,
         expected_python_version: str,
         expected_git_commit: str,
+        require_git_lineage: bool,
     ) -> None:
         observed.update(
             {
@@ -100,6 +101,7 @@ def test_attested_medallion_import_uses_quick_verifier_not_full_scan(
                 "attestation": attestation_path,
                 "python": expected_python_version,
                 "commit": expected_git_commit,
+                "require_git_lineage": require_git_lineage,
             }
         )
 
@@ -123,6 +125,7 @@ def test_attested_medallion_import_uses_quick_verifier_not_full_scan(
         "attestation": attestation,
         "python": "3.12.13",
         "commit": "a" * 40,
+        "require_git_lineage": False,
     }
 
 

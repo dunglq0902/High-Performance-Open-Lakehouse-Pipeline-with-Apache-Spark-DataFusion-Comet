@@ -174,11 +174,14 @@ TPC-H SF1 còn khóa source archive, checksum, schema, row count, PK/FK, date bo
 
 Suite preparation full-validate hai dataset duy nhất một lần, phát hành attestation gắn với clean
 Git commit, runtime lock, manifest và SHA-256 của toàn bộ Parquet, rồi dùng attestation đó để tạo 10
-plan bất biến. Đây là cache receipt trong trusted local workspace, không phải chữ ký mật mã hay xác
-nhận của bên thứ ba; strict report vẫn tự kiểm tra receipt và băm lại inventory vật lý. Cùng một
-commit, Spark image và Docker-volume identity dùng chung collector calibration; các workload cùng
-dataset/attestation dùng chung Medallion snapshot đã pin. Mỗi run có tối đa ba attempt cho
-`failed`/`timeout`; invalid result/environment hard-stop cả khi resume. Attempt lỗi được giữ bất biến
+plan bất biến. Attestation v2 chỉ được tái ràng buộc từ một full receipt ở commit tổ tiên khi runtime,
+inventory vật lý và Git tree của semantic validator giống tuyệt đối; TPC-H còn băm lại cả tám file
+nguồn `.tbl`, và lineage không được nối chuỗi. Đây là cache receipt trong trusted local workspace,
+không phải chữ ký mật mã hay xác nhận của bên thứ ba; strict report vẫn tự kiểm tra receipt và băm
+lại inventory vật lý. Cùng một commit, Spark image và Docker-volume identity dùng chung collector
+calibration; các workload cùng dataset/attestation dùng chung Medallion snapshot đã pin. Mỗi run có
+tối đa ba attempt cho `failed`/`timeout`; invalid result/environment hard-stop cả khi resume.
+Attempt lỗi được giữ bất biến
 ngoài `results/raw`, và strict verification khóa cả attempt/log lẫn capacity, calibration, Medallion
 và attestation trước khi cho phép công bố.
 
@@ -187,11 +190,13 @@ và attestation trước khi cho phép công bố.
 Control plane, toàn bộ core workload và primary TPC-H dataset đã sẵn sàng cho campaign. Primary
 E-commerce đã chuyển sang revision v3 để đáp ứng capacity gate về phân bố kích thước fact file:
 
-- E-commerce `ecommerce-small-uniform-seed-20260827-v3` giữ nguyên 10.110.000 dòng logic
+- E-commerce `ecommerce-small-uniform-seed-20260827-v3` có 10.110.000 dòng logic
   (100.000 customers, 10.000 products, 1.000.000 orders, 4.000.000 order items và 5.000.000
   events), nhưng gộp `order_items` thành 1.000.000 dòng/file để tạo 4 file thay vì 8 file nhỏ.
-  Profile dự kiến tạo tổng cộng 18 Parquet. Revision này phải được sinh từ final clean commit và
-  content-validate trước campaign; chưa có manifest SHA-256/provenance v3 để công bố.
+  Revision đã được sinh thành 18 Parquet, tổng cộng 241.845.093 byte; cả 16 fact files đều lớn hơn
+  8 MiB. Manifest file SHA-256 là
+  `05ab005cc05d6c95cf7e976d2ece4c7a2e6b07efa7d329a5d893d1b156686bce`; generator v1.0.0 chạy
+  từ clean commit `701883a6e8977310986d7e0cba26cae498d7b340`, bằng CPython 3.12.13/PyArrow 21.0.0.
 - TPC-H-derived `tpch-derived-sf1-852ad0a5ee31-v1`: 8.661.245 dòng trên đủ tám bảng, 9 Parquet,
   370.681.574 byte. Manifest file SHA-256 là
   `4aff1a0bc09c2b02f09e1c91f30cb0abb287b03976c2d24c5f211c8cf068a552`; generator v1.0.2 chạy

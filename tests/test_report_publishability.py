@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
+import os
 import platform
 import shutil
 from collections.abc import Iterator
@@ -14,6 +16,7 @@ import pyarrow as pa  # type: ignore[import-untyped]
 import pytest
 
 import analysis.report_publishability as publishability
+import benchmark.runner.evidence as evidence_module
 from analysis.report_publishability import (
     EXPECTED_CAMPAIGN_RUNS,
     EXPECTED_CORE_CAMPAIGNS,
@@ -85,9 +88,107 @@ class _FixtureState:
     records: list[dict[str, object]]
 
 
+@dataclass(frozen=True, slots=True)
+class _TreeSnapshot:
+    directories: frozenset[Path]
+    files: dict[Path, bytes]
+    file_mtime_ns: dict[Path, int]
+    file_sha256: dict[Path, str]
+
+
+@dataclass(frozen=True, slots=True)
+class _SharedEvidence:
+    root: Path
+    state: _FixtureState
+    snapshot: _TreeSnapshot
+
+
 def _write_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, sort_keys=True), encoding="utf-8")
+
+
+def _snapshot_tree(root: Path) -> _TreeSnapshot:
+    if not root.is_dir():
+        raise AssertionError(f"evidence root is not a directory: {root}")
+
+    directories: set[Path] = set()
+    files: dict[Path, bytes] = {}
+    file_mtime_ns: dict[Path, int] = {}
+    file_sha256: dict[Path, str] = {}
+    for path in root.rglob("*"):
+        relative = path.relative_to(root)
+        if path.is_symlink():
+            raise AssertionError(f"evidence tree contains a symbolic link: {relative}")
+        if path.is_dir():
+            directories.add(relative)
+        elif path.is_file():
+            payload = path.read_bytes()
+            files[relative] = payload
+            file_mtime_ns[relative] = path.stat().st_mtime_ns
+            file_sha256[relative] = hashlib.sha256(payload).hexdigest()
+        else:
+            raise AssertionError(f"evidence tree contains an unsupported path: {relative}")
+    return _TreeSnapshot(
+        directories=frozenset(directories),
+        files=files,
+        file_mtime_ns=file_mtime_ns,
+        file_sha256=file_sha256,
+    )
+
+
+def _restore_tree(root: Path, snapshot: _TreeSnapshot) -> None:
+    if root.is_symlink() or root.is_file():
+        root.unlink()
+    root.mkdir(parents=True, exist_ok=True)
+
+    current_paths = sorted(
+        root.rglob("*"),
+        key=lambda path: len(path.relative_to(root).parts),
+        reverse=True,
+    )
+    for path in current_paths:
+        relative = path.relative_to(root)
+        if path.is_symlink():
+            path.unlink()
+            continue
+        if path.is_file():
+            expected = snapshot.files.get(relative)
+            if expected is None:
+                path.unlink()
+            elif path.read_bytes() != expected:
+                path.write_bytes(expected)
+            continue
+        if path.is_dir():
+            if relative not in snapshot.directories:
+                path.rmdir()
+            continue
+        raise AssertionError(f"evidence tree contains an unsupported path: {relative}")
+
+    for relative in sorted(snapshot.directories, key=lambda value: len(value.parts)):
+        (root / relative).mkdir(parents=True, exist_ok=True)
+    for relative, expected in snapshot.files.items():
+        path = root / relative
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(expected)
+        mtime_ns = snapshot.file_mtime_ns[relative]
+        os.utime(path, ns=(mtime_ns, mtime_ns))
+
+
+def _cached_snapshot_sha256(path: Path, root: Path, snapshot: _TreeSnapshot) -> str:
+    """Reuse fixture hashes only while size and restored mtime still match the snapshot."""
+
+    try:
+        relative = path.resolve(strict=False).relative_to(root.resolve())
+    except ValueError:
+        return sha256_file(path)
+    expected = snapshot.files.get(relative)
+    if expected is not None and path.is_file() and not path.is_symlink():
+        stat = path.stat()
+        if stat.st_size == len(expected) and stat.st_mtime_ns == snapshot.file_mtime_ns[relative]:
+            return snapshot.file_sha256[relative]
+    return sha256_file(path)
 
 
 def _repo_relative(path: Path) -> str:
@@ -861,14 +962,39 @@ def _current_hashes(experiment: publishability.CoreExperiment) -> dict[str, str]
     return copy.deepcopy(value)
 
 
-@pytest.fixture(autouse=True)
-def _stable_current_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+@pytest.fixture(scope="module")
+def _shared_evidence_tree() -> Iterator[_SharedEvidence]:
     global _TEST_EVIDENCE_ROOT
     global _TEST_STATE
 
     evidence_root = ROOT / ".artifacts/report-publishability-tests" / uuid4().hex
     _TEST_EVIDENCE_ROOT = evidence_root
-    _TEST_STATE = None
+    _TEST_STATE = _build_fixture_state(evidence_root)
+    shared = _SharedEvidence(
+        root=evidence_root,
+        state=_TEST_STATE,
+        snapshot=_snapshot_tree(evidence_root),
+    )
+    try:
+        yield shared
+    finally:
+        shutil.rmtree(evidence_root, ignore_errors=True)
+        _TEST_EVIDENCE_ROOT = None
+        _TEST_STATE = None
+
+
+@pytest.fixture(autouse=True)
+def _stable_current_repository(
+    monkeypatch: pytest.MonkeyPatch,
+    _shared_evidence_tree: _SharedEvidence,
+) -> Iterator[None]:
+    global _TEST_EVIDENCE_ROOT
+    global _TEST_STATE
+
+    shared = _shared_evidence_tree
+    evidence_root = shared.root
+    _TEST_EVIDENCE_ROOT = evidence_root
+    _TEST_STATE = shared.state
     monkeypatch.setattr(publishability, "CAMPAIGN_CONTROL_ROOT", evidence_root / "campaigns")
     monkeypatch.setattr(
         publishability,
@@ -881,15 +1007,19 @@ def _stable_current_repository(monkeypatch: pytest.MonkeyPatch) -> Iterator[None
         evidence_root / "research-shared",
     )
     monkeypatch.setattr(publishability, "clean_git_commit", lambda _root: TEST_COMMIT)
+
+    def cached_sha256(path: Path) -> str:
+        return _cached_snapshot_sha256(path, evidence_root, shared.snapshot)
+
+    monkeypatch.setattr(publishability, "sha256_file", cached_sha256)
+    monkeypatch.setattr(evidence_module, "sha256_file", cached_sha256)
     # Full content rehashing is covered by test_dataset_attestation.py. These policy tests keep
     # the complete attestation payload/path contract but avoid re-reading hundreds of MB per case.
     monkeypatch.setattr(publishability, "verify_attestation", lambda *_args, **_kwargs: None)
     try:
         yield
     finally:
-        shutil.rmtree(evidence_root, ignore_errors=True)
-        _TEST_EVIDENCE_ROOT = None
-        _TEST_STATE = None
+        _restore_tree(evidence_root, shared.snapshot)
 
 
 def _measurement_records() -> list[dict[str, object]]:
@@ -965,6 +1095,44 @@ def _write_verifications(
         (directory / "experiment-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         value = _verification_value(experiment.experiment_id, source, manifest)
         (directory / "campaign-verification.json").write_text(json.dumps(value), encoding="utf-8")
+
+
+def test_tree_snapshot_restore_repairs_content_and_path_type_collisions(tmp_path: Path) -> None:
+    root = tmp_path / "evidence"
+    changed = root / "nested" / "changed.json"
+    missing = root / "nested" / "missing.json"
+    file_replaced_by_directory = root / "file.json"
+    directory_replaced_by_file = root / "empty"
+    cached_file = root / "cached.bin"
+    changed.parent.mkdir(parents=True)
+    directory_replaced_by_file.mkdir()
+    changed.write_bytes(b'{"value":"original"}')
+    missing.write_bytes(b'{"value":"required"}')
+    file_replaced_by_directory.write_bytes(b'{"kind":"file"}')
+    cached_file.write_bytes(b"abcdef")
+    snapshot = _snapshot_tree(root)
+
+    baseline_hash = _cached_snapshot_sha256(cached_file, root, snapshot)
+    cached_file.write_bytes(b"ghijkl")
+    cached_mtime = snapshot.file_mtime_ns[cached_file.relative_to(root)] + 1_000_000_000
+    os.utime(cached_file, ns=(cached_mtime, cached_mtime))
+    assert _cached_snapshot_sha256(cached_file, root, snapshot) != baseline_hash
+
+    changed.write_bytes(b'{"value":"tampered"}')
+    missing.unlink()
+    file_replaced_by_directory.unlink()
+    file_replaced_by_directory.mkdir()
+    (file_replaced_by_directory / "unexpected.txt").write_text("unexpected", encoding="utf-8")
+    directory_replaced_by_file.rmdir()
+    directory_replaced_by_file.write_text("wrong path type", encoding="utf-8")
+    extra = root / "extra" / "nested"
+    extra.mkdir(parents=True)
+    (extra / "unexpected.json").write_text("{}", encoding="utf-8")
+
+    _restore_tree(root, snapshot)
+
+    assert _snapshot_tree(root) == snapshot
+    assert _cached_snapshot_sha256(cached_file, root, snapshot) == baseline_hash
 
 
 def test_exact_core_suite_is_publishable(tmp_path: Path) -> None:
@@ -1075,7 +1243,8 @@ def test_incomplete_measurement_observability_blocks_publication(
     campaign_root = tmp_path / "campaigns"
     records = _measurement_records()
     _write_verifications(campaign_root, records)
-    payload = records[0][section]
+    measurement = next(record for record in records if record["phase"] == "measurement")
+    payload = measurement[section]
     assert isinstance(payload, dict)
     payload[field] = invalid
 
@@ -1089,7 +1258,8 @@ def test_resource_metric_exclusion_blocks_publication(tmp_path: Path) -> None:
     campaign_root = tmp_path / "campaigns"
     _write_verifications(campaign_root)
     records = _measurement_records()
-    metrics = records[0]["metrics"]
+    measurement = next(record for record in records if record["phase"] == "measurement")
+    metrics = measurement["metrics"]
     assert isinstance(metrics, dict)
     metrics.pop("cpu_core_seconds")
 
@@ -1105,7 +1275,8 @@ def test_failed_measurement_blocks_summary_admission(tmp_path: Path) -> None:
     campaign_root = tmp_path / "campaigns"
     _write_verifications(campaign_root)
     records = _measurement_records()
-    records[0]["status"] = "failed"
+    measurement = next(record for record in records if record["phase"] == "measurement")
+    measurement["status"] = "failed"
 
     evidence = assess_report_publishability(records, campaign_root)
 

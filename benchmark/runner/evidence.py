@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from collections.abc import Iterable, Mapping
@@ -28,14 +29,82 @@ class RepositoryEvidenceError(ValueError):
     """The current repository cannot provide clean, immutable Git provenance."""
 
 
+def isolated_git_environment() -> dict[str, str]:
+    """Return an environment that cannot redirect or rewrite repository object lookups."""
+
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    environment["GIT_NO_REPLACE_OBJECTS"] = "1"
+    environment["GIT_TERMINAL_PROMPT"] = "0"
+    return environment
+
+
+def validate_git_object_graph(repository_root: Path) -> None:
+    """Reject local Git mechanisms that can silently replace commits or ancestry."""
+
+    root = repository_root.resolve()
+    environment = isolated_git_environment()
+    try:
+        top_level_result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=root,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        replace_result = subprocess.run(
+            ["git", "for-each-ref", "--format=%(refname)", "refs/replace"],
+            cwd=root,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        graft_result = subprocess.run(
+            ["git", "rev-parse", "--git-path", "info/grafts"],
+            cwd=root,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise RepositoryEvidenceError(
+            f"Git object-graph provenance is unavailable: {error}"
+        ) from error
+
+    try:
+        top_level = Path(top_level_result.stdout.strip()).resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise RepositoryEvidenceError("Git returned an invalid repository top level") from error
+    if top_level != root:
+        raise RepositoryEvidenceError(
+            f"Git top level differs from the requested repository: {top_level}"
+        )
+    if replace_result.stdout.strip():
+        raise RepositoryEvidenceError("Git replace refs are not allowed for evidence provenance")
+
+    graft_value = graft_result.stdout.strip()
+    if not graft_value:
+        raise RepositoryEvidenceError("Git returned no graft-file location")
+    graft_path = Path(graft_value)
+    if not graft_path.is_absolute():
+        graft_path = root / graft_path
+    if graft_path.is_symlink() or (graft_path.is_file() and graft_path.stat().st_size > 0):
+        raise RepositoryEvidenceError("Git grafts are not allowed for evidence provenance")
+
+
 def clean_git_commit(repository_root: Path) -> str:
     """Return the full HEAD object ID, failing closed for any worktree change."""
 
     root = repository_root.resolve()
+    validate_git_object_graph(root)
+    environment = isolated_git_environment()
     try:
         commit_result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "--verify", "HEAD^{commit}"],
             cwd=root,
+            env=environment,
             check=True,
             capture_output=True,
             text=True,
@@ -43,12 +112,14 @@ def clean_git_commit(repository_root: Path) -> str:
         status_result = subprocess.run(
             ["git", "status", "--porcelain", "--untracked-files=normal"],
             cwd=root,
+            env=environment,
             check=True,
             capture_output=True,
             text=True,
         )
     except (OSError, subprocess.CalledProcessError) as error:
         raise RepositoryEvidenceError(f"Git provenance is unavailable: {error}") from error
+    validate_git_object_graph(root)
     commit = commit_result.stdout.strip()
     if re.fullmatch(r"[0-9a-f]{40}", commit) is None:
         raise RepositoryEvidenceError(f"unexpected Git HEAD object ID: {commit!r}")

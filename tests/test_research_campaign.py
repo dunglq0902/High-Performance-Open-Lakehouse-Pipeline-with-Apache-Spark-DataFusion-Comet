@@ -290,17 +290,44 @@ def test_sampler_readiness_failure_escalates_terminate_to_kill_and_closes_logs(
     assert process.stderr.closed is True
 
 
-def test_online_measurement_admission_requires_complete_plan_and_collectors() -> None:
-    run = CampaignRun(
-        experiment_id="EXP-ECOM-SMALL-M02",
-        run_id="measurement-p0001-o1-spark_baseline",
-        phase="measurement",
-        engine="spark_baseline",
-        pair_index=1,
-        order_index=1,
-        warmup_runs=2,
-        timeout_seconds=1800,
-    )
+@pytest.mark.parametrize(
+    "run",
+    [
+        CampaignRun(
+            experiment_id="EXP-ECOM-SMALL-M02",
+            run_id="correctness-spark_baseline",
+            phase="correctness",
+            engine="spark_baseline",
+            pair_index=None,
+            order_index=1,
+            warmup_runs=0,
+            timeout_seconds=1800,
+        ),
+        CampaignRun(
+            experiment_id="EXP-ECOM-SMALL-M02",
+            run_id="plan-spark_baseline",
+            phase="plan_capture",
+            engine="spark_baseline",
+            pair_index=None,
+            order_index=1,
+            warmup_runs=0,
+            timeout_seconds=1800,
+        ),
+        CampaignRun(
+            experiment_id="EXP-ECOM-SMALL-M02",
+            run_id="measurement-p0001-o1-spark_baseline",
+            phase="measurement",
+            engine="spark_baseline",
+            pair_index=1,
+            order_index=1,
+            warmup_runs=2,
+            timeout_seconds=1800,
+        ),
+    ],
+)
+def test_online_admission_requires_complete_plan_and_collectors_for_every_phase(
+    run: CampaignRun,
+) -> None:
     record = {
         "plan_analysis": {"status": "complete"},
         "metrics": {"collector_status": "complete"},
@@ -312,6 +339,12 @@ def test_online_measurement_admission_requires_complete_plan_and_collectors() ->
         "invalid_environment",
         "IncompleteResourceEvidence",
     )
+    record.pop("metrics")
+    assert _online_admission_failure(run, record)[:2] == (
+        "invalid_environment",
+        "IncompleteResourceEvidence",
+    )
+    record["metrics"] = {"collector_status": "complete"}
     record["plan_analysis"] = {"status": "partial"}
     assert _online_admission_failure(run, record)[:2] == (
         "invalid_result",
@@ -591,9 +624,9 @@ def test_run_attempt_directories_are_immutable_and_monotonic(
         )
 
 
-def test_docker_executor_recovers_one_admitted_orphan_without_deleting_evidence(
+def _interrupted_recovery_case(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+) -> tuple[DockerCampaignExecutor, CampaignRun, Path, Path, Path]:
     monkeypatch.setattr("scripts.run_research_campaign._container_path", lambda path: str(path))
     config = yaml.safe_load(
         (ROOT / "benchmark/configs/benchmark-laptop-m02.yaml").read_text(encoding="utf-8")
@@ -635,9 +668,16 @@ def test_docker_executor_recovers_one_admitted_orphan_without_deleting_evidence(
         provenance=executor.expected_provenance(run),
         runtime=_runtime_from_lock(run.engine),
     )
-    admission_bytes = (first / ATTEMPT_ADMISSION_FILENAME).read_bytes()
     failure_root = tmp_path / "failed-attempts"
     raw_path = tmp_path / "raw" / "result.json"
+    return executor, run, first, failure_root, raw_path
+
+
+def test_docker_executor_recovers_one_admitted_orphan_without_deleting_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    executor, run, first, failure_root, raw_path = _interrupted_recovery_case(tmp_path, monkeypatch)
+    admission_bytes = (first / ATTEMPT_ADMISSION_FILENAME).read_bytes()
 
     executor.recover_interrupted_attempt(
         run,
@@ -673,6 +713,46 @@ def test_docker_executor_recovers_one_admitted_orphan_without_deleting_evidence(
         failure_root=failure_root,
     )
     assert list(failure_root.rglob("*.json")) == [failure_path]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "{",
+        "[]",
+        '{"status":"bogus"}',
+    ],
+)
+def test_docker_executor_hard_stops_unreconciled_application_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    payload: str,
+) -> None:
+    executor, run, first, failure_root, raw_path = _interrupted_recovery_case(tmp_path, monkeypatch)
+    application_path = first / "application-result.json"
+    application_path.write_text(payload, encoding="utf-8")
+    application_bytes = application_path.read_bytes()
+
+    executor.recover_interrupted_attempt(
+        run,
+        raw_path=raw_path,
+        failure_root=failure_root,
+    )
+    failure_path = next(failure_root.rglob("*.json"))
+    failure_bytes = failure_path.read_bytes()
+    failure = json.loads(failure_bytes)
+
+    assert failure["status"] == "invalid_result"
+    assert failure["failure"]["class"] == "UnreconciledApplicationResult"
+    assert application_path.read_bytes() == application_bytes
+
+    executor.recover_interrupted_attempt(
+        run,
+        raw_path=raw_path,
+        failure_root=failure_root,
+    )
+    assert failure_path.read_bytes() == failure_bytes
+    assert application_path.read_bytes() == application_bytes
 
 
 def test_existing_medallion_must_bind_current_dataset_and_attestation(
