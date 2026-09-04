@@ -63,6 +63,7 @@ LOCK_PATH = ROOT / "runtime-versions.lock"
 EVENT_LOG_ROOT = ROOT / ".artifacts/spark-events"
 EVENT_LOG_CONTAINER_ROOT = "/opt/lakehouse/.artifacts/spark-events"
 EVENT_LOG_STAGING_FILENAME = "event-log-staging.json"
+CLIENT_IMAGE_OVERRIDE_FILENAME = "spark-client-image.override.json"
 COLLECTOR_PATH = ROOT / "benchmark/collectors/resources.py"
 CALIBRATION_SCRIPT_PATH = ROOT / "scripts/calibrate_resource_collector.py"
 SERVICE_EXPECTATIONS = {
@@ -155,13 +156,13 @@ def _wait_for_services(*, timeout_seconds: float = 600, poll_seconds: float = 2)
         raise CampaignError(f"timed out waiting for Compose services: {details}")
 
 
-def _compose_up() -> None:
+def _compose_up(*, build_services: bool = True) -> None:
     command = [
         "docker",
         "compose",
         "up",
         "-d",
-        "--build",
+        *(["--build"] if build_services else ["--no-build", "--pull", "never"]),
         *SERVICE_EXPECTATIONS,
     ]
     last_error: subprocess.SubprocessError | None = None
@@ -439,6 +440,35 @@ def _cpu_model() -> str:
     return value or "unknown-cpu"
 
 
+def _validate_image_id(image_id: str) -> None:
+    if re.fullmatch(r"sha256:[a-f0-9]{64}", image_id) is None:
+        raise CampaignError(f"expected an immutable Docker image ID, got {image_id!r}")
+
+
+def _pinned_client_compose_command(evidence_dir: Path, image_id: str) -> list[str]:
+    """Bind this client's complete image to the observed worker, not a mutable image tag."""
+
+    _validate_image_id(image_id)
+    _container_path(evidence_dir)
+    override = evidence_dir / CLIENT_IMAGE_OVERRIDE_FILENAME
+    if override.is_symlink():
+        raise CampaignError("client image override must not be a symlink")
+    write_json(
+        override,
+        {"services": {"spark-client": {"image": image_id, "pull_policy": "never"}}},
+    )
+    return [
+        "docker",
+        "compose",
+        "-f",
+        str(ROOT / "docker-compose.yml"),
+        "-f",
+        str(override.resolve()),
+        "--profile",
+        "tools",
+    ]
+
+
 def _spark_submit_command(
     config: dict[str, Any],
     run: CampaignRun,
@@ -446,13 +476,11 @@ def _spark_submit_command(
     output_path: Path,
     *,
     event_log_staging: Path,
+    spark_image_id: str,
 ) -> list[str]:
     container_name = "lakehouse-bench-" + hashlib.sha256(run.run_id.encode()).hexdigest()[:16]
     command = [
-        "docker",
-        "compose",
-        "--profile",
-        "tools",
+        *_pinned_client_compose_command(output_path.parent, spark_image_id),
         "run",
         "--rm",
         "--no-deps",
@@ -822,9 +850,20 @@ def _image_id(service: str) -> str:
     if not container_id:
         raise CampaignError(f"Compose service has no container: {service}")
     image_id = _run(["docker", "inspect", "--format", "{{.Image}}", container_id]).stdout.strip()
-    if not image_id.startswith("sha256:") or len(image_id) != 71:
-        raise CampaignError(f"Docker returned invalid image ID for {service}: {image_id!r}")
+    _validate_image_id(image_id)
     return image_id
+
+
+def _admitted_spark_image(expected_image_id: str | None = None) -> str:
+    if expected_image_id is not None:
+        _validate_image_id(expected_image_id)
+    worker_image = _image_id("spark-worker")
+    master_image = _image_id("spark-master")
+    if master_image != worker_image:
+        raise CampaignError("Spark master and worker image IDs differ")
+    if expected_image_id is not None and worker_image != expected_image_id:
+        raise CampaignError("Spark worker image differs from the admitted research-suite image")
+    return worker_image
 
 
 def _worker_limits() -> tuple[int, float, int]:
@@ -1289,9 +1328,11 @@ def _prepare_medallion(
     config: dict[str, Any],
     output: Path,
     *,
+    spark_image_id: str,
     dataset_attestation: Path | None = None,
     expected_git_commit: str | None = None,
 ) -> None:
+    _validate_image_id(spark_image_id)
     event_root = output.parent / f"{output.stem}-event-logs"
     prior_attempt = False
     if event_root.exists() or event_root.is_symlink():
@@ -1335,10 +1376,7 @@ def _prepare_medallion(
     )
     event_log_staging = _create_event_log_staging(event_dir, container_name)
     command = [
-        "docker",
-        "compose",
-        "--profile",
-        "tools",
+        *_pinned_client_compose_command(event_dir, spark_image_id),
         "run",
         "--rm",
         "--no-deps",
@@ -1627,6 +1665,7 @@ class DockerCampaignExecutor:
                         self.medallion_path,
                         application_path,
                         event_log_staging=event_log_staging,
+                        spark_image_id=self.spark_image_id,
                     ),
                     timeout_seconds=run.timeout_seconds,
                     stdout_path=run_dir / "stdout.log",
@@ -1844,8 +1883,12 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="benchmark/configs/benchmark-laptop-m02.yaml")
     parser.add_argument("--keep-services", action="store_true")
+    parser.add_argument("--no-build", action="store_true")
+    parser.add_argument("--expected-spark-image")
     parser.add_argument("--dataset-attestation", type=Path, required=True)
     args = parser.parse_args()
+    if args.expected_spark_image is not None:
+        _validate_image_id(args.expected_spark_image)
 
     if os.name == "nt":
         raise SystemExit("run the research campaign from Ubuntu/WSL, not PowerShell")
@@ -1885,8 +1928,8 @@ def main() -> None:
     compose_attempted = False
     try:
         compose_attempted = True
-        _compose_up()
-        spark_image_id = _image_id("spark-worker")
+        _compose_up(build_services=not args.no_build)
+        spark_image_id = _admitted_spark_image(args.expected_spark_image)
         storage_identity = _storage_identity()
         cpu_model = _cpu_model()
         control_environment = {
@@ -1926,6 +1969,7 @@ def main() -> None:
         _prepare_medallion(
             config,
             medallion_path,
+            spark_image_id=spark_image_id,
             dataset_attestation=dataset_attestation,
             expected_git_commit=commit,
         )

@@ -5,13 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from benchmark.cli import command_plan
-from benchmark.runner.canonical import sha256_file
+from benchmark.runner.canonical import sha256_file, sha256_value
 from benchmark.runner.config import load_experiment, validate_runtime_profile
 from benchmark.runner.dataset_attestation import (
     DatasetAttestationNotReusable,
@@ -22,6 +23,7 @@ from benchmark.runner.dataset_attestation import (
 )
 from benchmark.runner.evidence import clean_git_commit
 from benchmark.runner.runtime import validate_runtime_lock
+from scripts.run_research_campaign import _attempt_artifacts
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_ROOT = ROOT / "benchmark/schemas"
@@ -50,7 +52,9 @@ class PreparedCampaign:
     attestation_path: Path
 
 
-def campaign_command(config: str, *, dataset_attestation: Path) -> list[str]:
+def campaign_command(
+    config: str, *, dataset_attestation: Path, expected_spark_image: str | None = None
+) -> list[str]:
     path = (ROOT / config).resolve()
     try:
         relative = path.relative_to(ROOT)
@@ -75,6 +79,10 @@ def campaign_command(config: str, *, dataset_attestation: Path) -> list[str]:
     if not resolved_attestation.is_file():
         raise ValueError(f"dataset attestation does not exist: {dataset_attestation}")
     command.extend(("--dataset-attestation", relative_attestation.as_posix()))
+    if expected_spark_image is not None:
+        if re.fullmatch(r"sha256:[a-f0-9]{64}", expected_spark_image) is None:
+            raise ValueError("expected Spark image must be an immutable SHA-256 image ID")
+        command.extend(("--no-build", "--expected-spark-image", expected_spark_image))
     return command
 
 
@@ -191,15 +199,45 @@ def prepare_suite(configs: tuple[str, ...]) -> tuple[PreparedCampaign, ...]:
     return tuple(prepared)
 
 
+def _campaign_image(plan_path: Path) -> str:
+    """Carry the first campaign's admitted image into subsequent campaigns, without rebuilding."""
+
+    attempts = _attempt_artifacts(plan_path.parent / "capacity-gate.json")
+    if not attempts:
+        raise ValueError("campaign has no admitted capacity evidence")
+    gate_path = attempts[-1][1]
+    value = json.loads(gate_path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("campaign capacity gate must be an object")
+    declared_hash = value.pop("artifact_sha256", None)
+    if (
+        value.get("artifact_class") != "research-capacity-gate-v1"
+        or value.get("passed") is not True
+        or declared_hash != sha256_value(value)
+    ):
+        raise ValueError("campaign capacity gate is not valid admitted evidence")
+    environment = value.get("environment")
+    image_id = environment.get("container_image_digest") if isinstance(environment, dict) else None
+    if not isinstance(image_id, str) or re.fullmatch(r"sha256:[a-f0-9]{64}", image_id) is None:
+        raise ValueError("campaign capacity gate has no immutable Spark image ID")
+    return image_id
+
+
 def run_suite(configs: tuple[str, ...], *, keep_services: bool) -> None:
     prepared = prepare_suite(configs)
-    commands = [
-        campaign_command(item.config, dataset_attestation=item.attestation_path)
-        for item in prepared
-    ]
+    expected_image: str | None = None
     try:
-        for command in commands:
+        for item in prepared:
+            command = campaign_command(
+                item.config,
+                dataset_attestation=item.attestation_path,
+                expected_spark_image=expected_image,
+            )
             subprocess.run(command, cwd=ROOT, check=True)
+            current_image = _campaign_image(item.plan_path)
+            if expected_image is not None and current_image != expected_image:
+                raise ValueError("Spark image changed between research campaigns")
+            expected_image = current_image
     finally:
         if not keep_services:
             subprocess.run(["docker", "compose", "down"], cwd=ROOT, check=False)

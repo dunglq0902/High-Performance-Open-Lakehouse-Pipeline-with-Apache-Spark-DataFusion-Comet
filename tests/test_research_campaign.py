@@ -12,14 +12,17 @@ from benchmark.runner.canonical import sha256_file, sha256_value
 from scripts.run_research_campaign import (
     ATTEMPT_ADMISSION_FILENAME,
     CALIBRATION_SCRIPT_PATH,
+    CLIENT_IMAGE_OVERRIDE_FILENAME,
     COLLECTOR_PATH,
     EVENT_LOG_CONTAINER_ROOT,
     EVENT_LOG_STAGING_FILENAME,
     ROOT,
     DockerCampaignExecutor,
+    _admitted_spark_image,
     _archive_event_log_staging,
     _capacity_gate,
     _collector_calibration,
+    _compose_up,
     _container_path,
     _create_event_log_staging,
     _find_event_log,
@@ -27,6 +30,7 @@ from scripts.run_research_campaign import (
     _native_event_log_base,
     _next_run_attempt_dir,
     _online_admission_failure,
+    _pinned_client_compose_command,
     _prepare_medallion,
     _resource_summary,
     _runtime_from_lock,
@@ -49,6 +53,69 @@ def test_runtime_failure_fingerprint_comes_from_exact_lock() -> None:
     assert baseline["spark_version"] == "4.1.3"
     assert baseline["comet_version"] is None
     assert comet["comet_version"] == "1.0.0"
+
+
+@pytest.mark.parametrize("build_services", [False, True])
+def test_compose_start_only_builds_when_requested(
+    monkeypatch: pytest.MonkeyPatch, build_services: bool
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("scripts.run_research_campaign._run", fake_run)
+    monkeypatch.setattr("scripts.run_research_campaign._wait_for_services", lambda: None)
+    _compose_up(build_services=build_services)
+    assert len(calls) == 1
+    if build_services:
+        assert "--build" in calls[0]
+        assert "--no-build" not in calls[0]
+    else:
+        assert "--build" not in calls[0]
+        assert "--no-build" in calls[0]
+        assert calls[0][calls[0].index("--pull") + 1] == "never"
+
+
+@pytest.mark.parametrize("mismatch", [None, "master", "expected"])
+def test_spark_admission_requires_one_exact_suite_image(
+    monkeypatch: pytest.MonkeyPatch, mismatch: str | None
+) -> None:
+    expected = "sha256:" + "a" * 64
+    different = "sha256:" + "b" * 64
+    images = {
+        "spark-worker": expected,
+        "spark-master": different if mismatch == "master" else expected,
+    }
+    monkeypatch.setattr("scripts.run_research_campaign._image_id", images.__getitem__)
+    if mismatch is None:
+        assert _admitted_spark_image(expected) == expected
+        assert _admitted_spark_image() == expected
+    else:
+        with pytest.raises(CampaignError, match="image"):
+            _admitted_spark_image(different if mismatch == "expected" else expected)
+
+
+@pytest.mark.parametrize("image_id", ["tag:latest", "sha256:" + "g" * 64, "sha256:" + "a" * 63])
+def test_pinned_client_rejects_tags_and_malformed_ids_before_writing(
+    tmp_path: Path, image_id: str
+) -> None:
+    with pytest.raises(CampaignError, match="immutable Docker image ID"):
+        _pinned_client_compose_command(tmp_path, image_id)
+    assert not list(tmp_path.iterdir())
+
+
+def test_client_image_override_is_immutable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("scripts.run_research_campaign._container_path", lambda path: str(path))
+    command = _pinned_client_compose_command(tmp_path, "sha256:" + "a" * 64)
+    original = (tmp_path / CLIENT_IMAGE_OVERRIDE_FILENAME).read_bytes()
+    assert _pinned_client_compose_command(tmp_path, "sha256:" + "a" * 64) == command
+    with pytest.raises(FileExistsError, match="immutable"):
+        _pinned_client_compose_command(tmp_path, "sha256:" + "b" * 64)
+    assert (tmp_path / CLIENT_IMAGE_OVERRIDE_FILENAME).read_bytes() == original
 
 
 def test_research_campaign_cli_requires_dataset_attestation(
@@ -251,7 +318,10 @@ def test_event_log_staging_failure_preserves_original_for_recovery(
     assert not (evidence / "spark-events").exists()
 
 
-def test_submit_command_uses_locked_profile_and_only_comet_deltas(tmp_path: Path) -> None:
+def test_submit_command_uses_locked_profile_and_only_comet_deltas(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("scripts.run_research_campaign._container_path", lambda path: str(path))
     config = yaml.safe_load(
         (ROOT / "benchmark/configs/benchmark-laptop-m02.yaml").read_text(encoding="utf-8")
     )
@@ -267,8 +337,21 @@ def test_submit_command_uses_locked_profile_and_only_comet_deltas(tmp_path: Path
         timeout_seconds=1800,
     )
     medallion = ROOT / ".artifacts/test/medallion.json"
-    output = ROOT / ".artifacts/test/application.json"
-    command = _spark_submit_command(config, run, medallion, output, event_log_staging=tmp_path)
+    output = tmp_path / "application.json"
+    image_id = "sha256:" + "a" * 64
+    command = _spark_submit_command(
+        config, run, medallion, output, event_log_staging=tmp_path, spark_image_id=image_id
+    )
+    assert command[:6] == [
+        "docker",
+        "compose",
+        "-f",
+        str(ROOT / "docker-compose.yml"),
+        "-f",
+        str(tmp_path / CLIENT_IMAGE_OVERRIDE_FILENAME),
+    ]
+    override = json.loads((tmp_path / CLIENT_IMAGE_OVERRIDE_FILENAME).read_text(encoding="utf-8"))
+    assert override == {"services": {"spark-client": {"image": image_id, "pull_policy": "never"}}}
     assert command[command.index("--volume") + 1] == f"{tmp_path}:{EVENT_LOG_CONTAINER_ROOT}"
     assert "--user" not in command
     assert "--properties-file" in command
@@ -932,6 +1015,7 @@ def test_existing_medallion_must_bind_current_dataset_and_attestation(
     _prepare_medallion(
         config,
         output,
+        spark_image_id="sha256:" + "a" * 64,
         dataset_attestation=attestation,
         expected_git_commit="a" * 40,
     )
@@ -942,6 +1026,7 @@ def test_existing_medallion_must_bind_current_dataset_and_attestation(
         _prepare_medallion(
             config,
             output,
+            spark_image_id="sha256:" + "a" * 64,
             dataset_attestation=attestation,
             expected_git_commit="a" * 40,
         )
@@ -981,15 +1066,28 @@ def test_medallion_uses_nonroot_native_staging_and_archives_failed_logs(
     monkeypatch.setattr("scripts.run_research_campaign._run", fake_run)
     monkeypatch.setattr("scripts.run_research_campaign.subprocess.run", fake_stop)
     if failure is None:
-        _prepare_medallion(config, output)
+        _prepare_medallion(config, output, spark_image_id="sha256:" + "a" * 64)
     else:
         with pytest.raises(subprocess.SubprocessError):
-            _prepare_medallion(config, output)
+            _prepare_medallion(config, output, spark_image_id="sha256:" + "a" * 64)
     assert len(submitted) == 1
     command = submitted[0]
     assert "--user" not in command
     assert command[command.index("--volume") + 1].endswith(f":{EVENT_LOG_CONTAINER_ROOT}")
     event_dir = next((tmp_path / "medallion-event-logs").iterdir())
+    override = json.loads((event_dir / CLIENT_IMAGE_OVERRIDE_FILENAME).read_text(encoding="utf-8"))
+    assert override["services"]["spark-client"] == {
+        "image": "sha256:" + "a" * 64,
+        "pull_policy": "never",
+    }
+    assert command[:6] == [
+        "docker",
+        "compose",
+        "-f",
+        str(ROOT / "docker-compose.yml"),
+        "-f",
+        str(event_dir / CLIENT_IMAGE_OVERRIDE_FILENAME),
+    ]
     assert (event_dir / "spark-events/application-event").read_bytes() == b"preserved Spark event"
     if failure == "timeout":
         assert stopped == [["docker", "rm", "-f", command[command.index("--name") + 1]]]
@@ -1018,7 +1116,7 @@ def test_medallion_reconciles_previous_active_client_before_reuse_or_launch(
 
     monkeypatch.setattr("scripts.run_research_campaign._run", fake_run)
     with pytest.raises(CampaignError, match="still active"):
-        _prepare_medallion({}, output)
+        _prepare_medallion({}, output, spark_image_id="sha256:" + "a" * 64)
     assert len(calls) == 1
     assert calls[0][:3] == ["docker", "container", "ls"]
     assert source.is_dir()
@@ -1039,7 +1137,7 @@ def test_medallion_does_not_retry_possibly_partial_build_without_audit(
         lambda command, **_kwargs: subprocess.CompletedProcess(command, 0, stdout="", stderr=""),
     )
     with pytest.raises(CampaignError, match="partial table build"):
-        _prepare_medallion({}, tmp_path / "medallion.json")
+        _prepare_medallion({}, tmp_path / "medallion.json", spark_image_id="sha256:" + "a" * 64)
     assert (event_dir / "spark-events/events").read_bytes() == b"interrupted build"
     assert len(list(event_dir.parent.iterdir())) == 1
 

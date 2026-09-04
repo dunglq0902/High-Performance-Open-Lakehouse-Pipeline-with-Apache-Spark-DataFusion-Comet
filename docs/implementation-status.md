@@ -12,7 +12,10 @@ publishable.
 - Locked Spark 4.1.3, Scala 2.13.17, Java 17.0.19, Comet 1.0.0, Iceberg 1.11.0, Python 3.12.13,
   OCI images, Maven artifacts, Python lock, and TPC-H DBGEN source/archive checksum.
 - Docker Compose topology for MinIO, REST Iceberg catalog, one Spark master, one 2-core/5-GiB
-  worker, and a bounded client container.
+  worker, and a bounded client container. Each Medallion and benchmark driver is pinned through an
+  immutable per-attempt Compose override to the admitted worker image ID, with pulling disabled.
+  Master/worker image equality is checked before admission. The suite builds for its first campaign
+  only, then requires that same admitted image for every remaining campaign without rebuilding.
 - Deterministic E-commerce generation with revisioned dataset IDs, immutable manifests, exact
   CPython version/implementation provenance, physical and logical content hashes, PK/FK/date/funnel
   checks, and a benchmark-eligible `small` profile.

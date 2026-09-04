@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
+from benchmark.runner.canonical import sha256_value
 from benchmark.runner.dataset_attestation import DatasetAttestationNotReusable
 from scripts import run_research_suite as suite_module
 from scripts.run_research_suite import (
@@ -14,8 +17,11 @@ from scripts.run_research_suite import (
     ECOMMERCE_CORE_CONFIGS,
     ROOT,
     TPCH_CORE_CONFIGS,
+    PreparedCampaign,
+    _campaign_image,
     _ensure_dataset_attestation,
     campaign_command,
+    run_suite,
 )
 
 _COMMIT = "a" * 40
@@ -72,6 +78,140 @@ def test_benchmark_one_routes_through_attested_suite_preparation() -> None:
     assert "scripts/run_research_suite.py" in body
     assert "--config $(BENCHMARK_CONFIG)" in body
     assert "scripts/run_research_campaign.py" not in body
+
+
+def test_followup_campaign_uses_fixed_image_without_build() -> None:
+    image_id = "sha256:" + "b" * 64
+    command = campaign_command(
+        ECOMMERCE_CORE_CONFIGS[0],
+        dataset_attestation=ROOT / "runtime-versions.lock",
+        expected_spark_image=image_id,
+    )
+    assert command[-3:] == ["--no-build", "--expected-spark-image", image_id]
+    with pytest.raises(ValueError, match="immutable SHA-256"):
+        campaign_command(
+            ECOMMERCE_CORE_CONFIGS[0],
+            dataset_attestation=ROOT / "runtime-versions.lock",
+            expected_spark_image="lakehouse/spark:latest",
+        )
+
+
+def _capacity_gate(
+    plan_path: Path, image_id: str, *, passed: bool = True, attempt: int = 1
+) -> Path:
+    value = {
+        "artifact_class": "research-capacity-gate-v1",
+        "passed": passed,
+        "environment": {"container_image_digest": image_id},
+    }
+    name = "capacity-gate.json" if attempt == 1 else f"capacity-gate-attempt-{attempt:04d}.json"
+    path = plan_path.parent / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({**value, "artifact_sha256": sha256_value(value)}), encoding="utf-8")
+    return path
+
+
+def test_suite_image_requires_valid_passed_capacity_evidence(tmp_path: Path) -> None:
+    plan = tmp_path / "experiment-manifest.json"
+    image_id = "sha256:" + "b" * 64
+    path = _capacity_gate(plan, image_id)
+    assert _campaign_image(plan) == image_id
+    _capacity_gate(plan, image_id, passed=False)
+    with pytest.raises(ValueError, match="valid admitted evidence"):
+        _campaign_image(plan)
+    _capacity_gate(plan, "mutable-tag")
+    with pytest.raises(ValueError, match="immutable Spark image ID"):
+        _campaign_image(plan)
+    _capacity_gate(plan, image_id)
+    tampered = json.loads(path.read_text(encoding="utf-8"))
+    tampered["environment"]["container_image_digest"] = "sha256:" + "c" * 64
+    path.write_text(json.dumps(tampered), encoding="utf-8")
+    with pytest.raises(ValueError, match="valid admitted evidence"):
+        _campaign_image(plan)
+
+
+def test_suite_image_uses_latest_contiguous_capacity_attempt(tmp_path: Path) -> None:
+    plan = tmp_path / "experiment-manifest.json"
+    image_id = "sha256:" + "b" * 64
+    with pytest.raises(ValueError, match="no admitted capacity evidence"):
+        _campaign_image(plan)
+    _capacity_gate(plan, image_id, passed=False)
+    _capacity_gate(plan, image_id, attempt=2)
+    assert _campaign_image(plan) == image_id
+    _capacity_gate(plan, image_id, attempt=4)
+    with pytest.raises(ValueError, match="not contiguous"):
+        _campaign_image(plan)
+
+
+def _prepared_campaigns(tmp_path: Path) -> tuple[PreparedCampaign, ...]:
+    return tuple(
+        PreparedCampaign(
+            config=config,
+            plan_path=tmp_path / str(index) / "experiment-manifest.json",
+            attestation_path=ROOT / "runtime-versions.lock",
+        )
+        for index, config in enumerate(ECOMMERCE_CORE_CONFIGS[:3])
+    )
+
+
+def test_suite_builds_once_and_carries_admitted_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prepared = _prepared_campaigns(tmp_path)
+    image_id = "sha256:" + "b" * 64
+    for item in prepared:
+        _capacity_gate(item.plan_path, image_id)
+    monkeypatch.setattr(suite_module, "prepare_suite", lambda _configs: prepared)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        suite_module.subprocess, "run", lambda command, **_kwargs: commands.append(command)
+    )
+
+    run_suite(ECOMMERCE_CORE_CONFIGS[:3], keep_services=False)
+
+    assert len(commands) == 4
+    assert "--no-build" not in commands[0]
+    for command in commands[1:3]:
+        assert command[-3:] == ["--no-build", "--expected-spark-image", image_id]
+    assert commands[-1] == ["docker", "compose", "down"]
+
+
+def test_suite_stops_on_image_drift_and_preserves_cleanup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prepared = _prepared_campaigns(tmp_path)
+    for index, item in enumerate(prepared):
+        _capacity_gate(item.plan_path, "sha256:" + ("b" if index == 0 else "c") * 64)
+    monkeypatch.setattr(suite_module, "prepare_suite", lambda _configs: prepared)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        suite_module.subprocess, "run", lambda command, **_kwargs: commands.append(command)
+    )
+
+    with pytest.raises(ValueError, match="image changed"):
+        run_suite(ECOMMERCE_CORE_CONFIGS[:3], keep_services=False)
+
+    assert len(commands) == 3
+    assert commands[-1] == ["docker", "compose", "down"]
+
+
+def test_suite_stops_before_next_campaign_after_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prepared = _prepared_campaigns(tmp_path)
+    monkeypatch.setattr(suite_module, "prepare_suite", lambda _configs: prepared)
+    commands: list[list[str]] = []
+
+    def run(command: list[str], **_kwargs: object) -> None:
+        commands.append(command)
+        if command != ["docker", "compose", "down"]:
+            raise subprocess.CalledProcessError(1, command)
+
+    monkeypatch.setattr(suite_module.subprocess, "run", run)
+    with pytest.raises(subprocess.CalledProcessError):
+        run_suite(ECOMMERCE_CORE_CONFIGS[:3], keep_services=False)
+    assert len(commands) == 2
+    assert commands[-1] == ["docker", "compose", "down"]
 
 
 def _dataset_manifest(tmp_path: Path) -> Path:
