@@ -1,0 +1,1233 @@
+{
+  "schema_version": 1,
+  "artifact_class": "non-publishable-core-plan-regression-v1",
+  "corpus_id": "spark-4.1.3_comet-1.0.0_iceberg-1.11.0_core-preflight-20260904-01",
+  "publishable": false,
+  "performance_evidence": false,
+  "primary_correctness_evidence": false,
+  "notice": "Exact final plans and observed paired outputs from shared diagnostic sessions only; not campaign admission or primary performance evidence. Unit tests do not replay output rows.",
+  "source_diagnostic": {
+    "path": ".artifacts/diagnostics/plan-preflight-20260904-01",
+    "notice_sha256": "f5ec98a2ce2023f94048d06d3178a08398b6062651721b9c1d1e2a7e5edb9730",
+    "notice": "Diagnostic plans/results only. Shared sessions, no repetitions or performance claims. No primary raw/campaign output.",
+    "image_id": "sha256:f519a86589658c5f2ab38c85605dc74bbffdae58d9518a92cf27d2474569ea4f",
+    "observed_git_head_not_primary_provenance": "d70db144877cc343d67aaf2094a04b709ae5f6e1",
+    "launch_notice_parser_source_sha256": "392d00f5cf9b06078ca1ebbce1d69650582b4abbf6dedf3f34421c6527b2003c",
+    "sessions": {
+      "spark_baseline": {
+        "application_id": "app-20260904122142-0001",
+        "session_sha256": "dfb4515151e2cbf7c75bf16a24964484511159f07af7bb8e6505de3cc998cb30",
+        "captured_parser_source_sha256": "8a1d2d35a99a2d936936cf67ce4e4354f1b5e1f93a87bd76f3a20f6353e1c3ae",
+        "uid": 185,
+        "runtime": {
+          "artifact_sha256": {
+            "apache-iceberg-aws-bundle": "38f01da7e96850cdd05e6616d758b77b43314b712a8808e3f9a824d56976162f",
+            "apache-iceberg-runtime": "d6ea6c5d099288daeb7d5a92061bd3d7d8f296492632b42378e5f2f0e3066242",
+            "datafusion-comet": "fc47c35419c20c38743ad5752ae3ae32e7a167923be628878d9caa22f41d6b67",
+            "scala": "b7822c4225243215f185925724a6edff92cf18777a136cc738276c4446fac76c"
+          },
+          "class_resources": {
+            "aws_s3_client": [
+              "jar:file:/opt/spark/jars/iceberg-aws-bundle-1.11.0.jar!/software/amazon/awssdk/services/s3/S3Client.class"
+            ],
+            "comet_plugin": [
+              "jar:file:/opt/spark/jars/comet-spark-spark4.1_2.13-1.0.0.jar!/org/apache/spark/CometPlugin.class"
+            ],
+            "hadoop_s3a": [],
+            "iceberg_build": [
+              "jar:file:/opt/spark/jars/iceberg-spark-runtime-4.1_2.13-1.11.0.jar!/org/apache/iceberg/IcebergBuild.class"
+            ],
+            "iceberg_s3_file_io": [
+              "jar:file:/opt/spark/jars/iceberg-spark-runtime-4.1_2.13-1.11.0.jar!/org/apache/iceberg/aws/s3/S3FileIO.class"
+            ],
+            "scala_properties": [
+              "jar:file:/opt/spark/jars/scala-library-2.13.17.jar!/scala/util/Properties.class"
+            ]
+          },
+          "comet_version": null,
+          "iceberg_full_version": "Apache Iceberg 1.11.0 (commit 6976e020b894f6a6777704df2b8c4458cb291ae9)",
+          "iceberg_version": "1.11.0",
+          "java_runtime_version": "17.0.19+10",
+          "java_version": "17.0.19",
+          "machine": "x86_64",
+          "python_version": "3.12.13",
+          "runtime_lock_sha256": "7eacccb22ff3b1ff040dcb6116300c446661bca96f065cc4150ba88e581e2f86",
+          "scala_version": "2.13.17",
+          "spark_version": "4.1.3"
+        }
+      },
+      "comet_accelerated": {
+        "application_id": "app-20260904122620-0002",
+        "session_sha256": "2aa8705b1acbcccd378bb1c9b769044a32fad46327bd017976c60dee8162b417",
+        "captured_parser_source_sha256": "8a1d2d35a99a2d936936cf67ce4e4354f1b5e1f93a87bd76f3a20f6353e1c3ae",
+        "uid": 185,
+        "runtime": {
+          "artifact_sha256": {
+            "apache-iceberg-aws-bundle": "38f01da7e96850cdd05e6616d758b77b43314b712a8808e3f9a824d56976162f",
+            "apache-iceberg-runtime": "d6ea6c5d099288daeb7d5a92061bd3d7d8f296492632b42378e5f2f0e3066242",
+            "datafusion-comet": "fc47c35419c20c38743ad5752ae3ae32e7a167923be628878d9caa22f41d6b67",
+            "scala": "b7822c4225243215f185925724a6edff92cf18777a136cc738276c4446fac76c"
+          },
+          "class_resources": {
+            "aws_s3_client": [
+              "jar:file:/opt/spark/jars/iceberg-aws-bundle-1.11.0.jar!/software/amazon/awssdk/services/s3/S3Client.class"
+            ],
+            "comet_plugin": [
+              "jar:file:/opt/spark/jars/comet-spark-spark4.1_2.13-1.0.0.jar!/org/apache/spark/CometPlugin.class"
+            ],
+            "hadoop_s3a": [],
+            "iceberg_build": [
+              "jar:file:/opt/spark/jars/iceberg-spark-runtime-4.1_2.13-1.11.0.jar!/org/apache/iceberg/IcebergBuild.class"
+            ],
+            "iceberg_s3_file_io": [
+              "jar:file:/opt/spark/jars/iceberg-spark-runtime-4.1_2.13-1.11.0.jar!/org/apache/iceberg/aws/s3/S3FileIO.class"
+            ],
+            "scala_properties": [
+              "jar:file:/opt/spark/jars/scala-library-2.13.17.jar!/scala/util/Properties.class"
+            ]
+          },
+          "comet_version": "1.0.0",
+          "iceberg_full_version": "Apache Iceberg 1.11.0 (commit 6976e020b894f6a6777704df2b8c4458cb291ae9)",
+          "iceberg_version": "1.11.0",
+          "java_runtime_version": "17.0.19+10",
+          "java_version": "17.0.19",
+          "machine": "x86_64",
+          "python_version": "3.12.13",
+          "runtime_lock_sha256": "7eacccb22ff3b1ff040dcb6116300c446661bca96f065cc4150ba88e581e2f86",
+          "scala_version": "2.13.17",
+          "spark_version": "4.1.3"
+        }
+      }
+    }
+  },
+  "review": {
+    "parser_path": "benchmark/parsers/plan.py",
+    "parser_source_sha256": "d1b9c4e119c45d9187fa2a7ecadd109a5239a8a9d93f24f067963132b16676c7",
+    "notice": "Review identity only; tests lock semantic output and full analysis rather than current parser source bytes."
+  },
+  "inputs": {
+    "runtime_lock": {
+      "path": "runtime-versions.lock",
+      "sha256": "7eacccb22ff3b1ff040dcb6116300c446661bca96f065cc4150ba88e581e2f86"
+    }
+  },
+  "queries": {
+    "M02": {
+      "suite": "micro",
+      "inputs": {
+        "experiment_config": {
+          "path": "benchmark/configs/benchmark-laptop-m02.yaml",
+          "sha256": "e5a714ed84574ce59211841228e65688d64bdbdde0c788577e5432b41bede7e3"
+        },
+        "workload_manifest": {
+          "path": "workloads/manifests/micro/M02_filter.yaml",
+          "sha256": "04b031c004479d81f73d4993e693ba263c6a64a7614dba1e92240a16a5e5c7c9"
+        },
+        "workload_sql": {
+          "path": "workloads/micro/M02_filter.sql",
+          "sha256": "8c89bd7aaf337e7a5d4b1a38e74570338b19d3beed4918caf9e1e9ecb69f374d"
+        }
+      },
+      "rendered_sql_sha256": "7c9532fb369d210ef35430bdc03bff45685a150fb06286b5cd7cf0ba3b7cea6d",
+      "dataset_source_identity": {
+        "manifest_path": "data/generated/ecommerce-small-uniform-seed-20260827-v3/manifest.json",
+        "manifest_sha256": "05ab005cc05d6c95cf7e976d2ece4c7a2e6b07efa7d329a5d893d1b156686bce",
+        "dataset_id": "ecommerce-small-uniform-seed-20260827-v3",
+        "verification_scope": "Declaration only; physical data and generated manifest are not required by these regression tests."
+      },
+      "observed_schema_json": "{\"fields\":[{\"metadata\":{},\"name\":\"selectivity_bucket\",\"nullable\":false,\"type\":\"integer\"},{\"metadata\":{},\"name\":\"matched_order_count\",\"nullable\":false,\"type\":\"long\"},{\"metadata\":{},\"name\":\"matched_order_id_sum\",\"nullable\":false,\"type\":\"long\"}],\"type\":\"struct\"}",
+      "engines": {
+        "spark_baseline": {
+          "comet_enabled": false,
+          "plan_file": "spark_baseline/M02/final-plan.txt",
+          "plan_sha256": "a887dab24b5c4d347c899fd6c0807e7f4790f958503beea81a13fec284913e8a",
+          "semantic_sha256": "651941fea7136c3011f258dd646c1646d990734c61ed13f50aface772d19f6e3",
+          "operator_sequence": [
+            "HashAggregate",
+            "Exchange",
+            "HashAggregate",
+            "Project",
+            "Filter",
+            "ColumnarToRow",
+            "BatchScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 6,
+            "comet_native_operators": 0,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 0,
+            "native_coverage_ratio": null,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "BatchScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "58ac56b18b21acb40f637c7212036cea180b4347602873df080618a3f3bee4ff",
+            "schema_sha256": "004700eb9934ede176544c1d32a09bd32f150cafb6520eeae5f7d584fc6cfabc",
+            "canonical_result_sha256": "2855663e96e87ea24768ff8fb1e9f1ae326ff19cbe5faa280dacace3517a66fb",
+            "row_count": 1,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        },
+        "comet_accelerated": {
+          "comet_enabled": true,
+          "plan_file": "comet_accelerated/M02/final-plan.txt",
+          "plan_sha256": "2eb7dbfbee3a2f6c07726bd30bb8e5b4a9aece1a773785f2db9b665253abb3e9",
+          "semantic_sha256": "347b535918523cefbd396963e0bb80114de8d6c074a5096ff4de68fe4e129a09",
+          "operator_sequence": [
+            "CometColumnarToRow",
+            "CometHashAggregate",
+            "CometExchange",
+            "CometHashAggregate",
+            "CometProject",
+            "CometFilter",
+            "CometIcebergNativeScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 6,
+            "comet_native_operators": 6,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 1,
+            "native_coverage_ratio": 1,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "CometIcebergNativeScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "497b9616977c7ccfe22371aadfa14ca561f70ad6a59f3322a5e0911bc54963bf",
+            "schema_sha256": "004700eb9934ede176544c1d32a09bd32f150cafb6520eeae5f7d584fc6cfabc",
+            "canonical_result_sha256": "2855663e96e87ea24768ff8fb1e9f1ae326ff19cbe5faa280dacace3517a66fb",
+            "row_count": 1,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        }
+      }
+    },
+    "M04": {
+      "suite": "micro",
+      "inputs": {
+        "experiment_config": {
+          "path": "benchmark/configs/benchmark-laptop-m04.yaml",
+          "sha256": "96eff7f16c4a761e2e688065d32869fdadfe9ccd51e5e1b55abc02a584084a73"
+        },
+        "workload_manifest": {
+          "path": "workloads/manifests/micro/M04_join.yaml",
+          "sha256": "4de5dc6f5b4bb45ad7d53a38b68c09972965b7c001a822d24ff1ab90ff811433"
+        },
+        "workload_sql": {
+          "path": "workloads/micro/M04_join.sql",
+          "sha256": "43ffecda333b82b669d76b3d94afec71ee03c90360e5cc652da25e51fd662ad1"
+        }
+      },
+      "rendered_sql_sha256": "63e20d468d058a80190cb1b45f551734c3a72729afa3c4f407c8054e198c0b37",
+      "dataset_source_identity": {
+        "manifest_path": "data/generated/ecommerce-small-uniform-seed-20260827-v3/manifest.json",
+        "manifest_sha256": "05ab005cc05d6c95cf7e976d2ece4c7a2e6b07efa7d329a5d893d1b156686bce",
+        "dataset_id": "ecommerce-small-uniform-seed-20260827-v3",
+        "verification_scope": "Declaration only; physical data and generated manifest are not required by these regression tests."
+      },
+      "observed_schema_json": "{\"fields\":[{\"metadata\":{},\"name\":\"order_id\",\"nullable\":false,\"type\":\"long\"},{\"metadata\":{},\"name\":\"line_number\",\"nullable\":false,\"type\":\"integer\"},{\"metadata\":{},\"name\":\"product_id\",\"nullable\":false,\"type\":\"long\"},{\"metadata\":{},\"name\":\"product_name\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"category\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"quantity\",\"nullable\":false,\"type\":\"integer\"},{\"metadata\":{},\"name\":\"unit_price\",\"nullable\":false,\"type\":\"decimal(18,2)\"},{\"metadata\":{},\"name\":\"discount\",\"nullable\":false,\"type\":\"decimal(5,4)\"}],\"type\":\"struct\"}",
+      "engines": {
+        "spark_baseline": {
+          "comet_enabled": false,
+          "plan_file": "spark_baseline/M04/final-plan.txt",
+          "plan_sha256": "eac7438b8d22ff64113910b92a3f8c036cc9b6308f486c0a5b23b22d2b5ddd4a",
+          "semantic_sha256": "106770407a4a07adb628feec13aa3646ec93717495ceb5a1364fed6abd5d7cbe",
+          "operator_sequence": [
+            "TakeOrderedAndProject",
+            "Project",
+            "BroadcastHashJoin",
+            "ColumnarToRow",
+            "BatchScan",
+            "BroadcastExchange",
+            "ColumnarToRow",
+            "BatchScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 6,
+            "comet_native_operators": 0,
+            "spark_fallback_operators": 0,
+            "transition_count": 2,
+            "native_subtree_count": 0,
+            "native_coverage_ratio": null,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "BatchScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "8892dfb0446e9d322de6d9166117afc69ad647b41abb7a73e0cc030d617c1dff",
+            "schema_sha256": "d0914898356fbfca0feb5b4c98e902076e34b1e5d442e47800d85aa88cf7de90",
+            "canonical_result_sha256": "337fb96c4a9894a0946aa486d9c1c31bfda7100dc54667ba6b6747b0d87aef18",
+            "row_count": 1000,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        },
+        "comet_accelerated": {
+          "comet_enabled": true,
+          "plan_file": "comet_accelerated/M04/final-plan.txt",
+          "plan_sha256": "a7bd2b800322c17347df9256b320e04a84e5828f0601ca60457fdc28a711e6d1",
+          "semantic_sha256": "25ed43bd4f7b47289ca1db75ebb80a07a47bde2e868bfdd14c58ad2bc505259d",
+          "operator_sequence": [
+            "CometColumnarToRow",
+            "CometTakeOrderedAndProject",
+            "CometProject",
+            "CometBroadcastHashJoin",
+            "CometIcebergNativeScan",
+            "CometBroadcastExchange",
+            "CometIcebergNativeScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 6,
+            "comet_native_operators": 6,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 1,
+            "native_coverage_ratio": 1,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "CometIcebergNativeScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "a80fa5cb7925e30116e1eeb029cb4d2318b3796540abfd9559e81d1f4717fdae",
+            "schema_sha256": "d0914898356fbfca0feb5b4c98e902076e34b1e5d442e47800d85aa88cf7de90",
+            "canonical_result_sha256": "337fb96c4a9894a0946aa486d9c1c31bfda7100dc54667ba6b6747b0d87aef18",
+            "row_count": 1000,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        }
+      }
+    },
+    "M05": {
+      "suite": "micro",
+      "inputs": {
+        "experiment_config": {
+          "path": "benchmark/configs/benchmark-laptop-m05.yaml",
+          "sha256": "0964e564a923327f3bcfb2de121921bfb858c7f3a398acb223ba9d49ff658dde"
+        },
+        "workload_manifest": {
+          "path": "workloads/manifests/micro/M05_low_card_aggregation.yaml",
+          "sha256": "65dad827885a6ca45709bc39f129a382be1203e867cbfdf5a24816327084cad0"
+        },
+        "workload_sql": {
+          "path": "workloads/micro/M05_low_card_aggregation.sql",
+          "sha256": "cdd7c7e21b33b02c43a2aa45c4577ec00fe18be26f56461db8d3830921c63e28"
+        }
+      },
+      "rendered_sql_sha256": "5d241bbc2499674aa80bba4f1b8ed51a758de15160da141bd0860f1982501180",
+      "dataset_source_identity": {
+        "manifest_path": "data/generated/ecommerce-small-uniform-seed-20260827-v3/manifest.json",
+        "manifest_sha256": "05ab005cc05d6c95cf7e976d2ece4c7a2e6b07efa7d329a5d893d1b156686bce",
+        "dataset_id": "ecommerce-small-uniform-seed-20260827-v3",
+        "verification_scope": "Declaration only; physical data and generated manifest are not required by these regression tests."
+      },
+      "observed_schema_json": "{\"fields\":[{\"metadata\":{},\"name\":\"status\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"payment_method\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"order_count\",\"nullable\":false,\"type\":\"long\"},{\"metadata\":{},\"name\":\"order_id_checksum\",\"nullable\":false,\"type\":\"long\"}],\"type\":\"struct\"}",
+      "engines": {
+        "spark_baseline": {
+          "comet_enabled": false,
+          "plan_file": "spark_baseline/M05/final-plan.txt",
+          "plan_sha256": "027b7d191f47c02167251723e08777af586b67b6755beb35bccfd44410d4c77d",
+          "semantic_sha256": "054231b208f9095046fcdab418c55da5a4f9af3eb8351c1f581588dc88d5fcb7",
+          "operator_sequence": [
+            "TakeOrderedAndProject",
+            "HashAggregate",
+            "Exchange",
+            "HashAggregate",
+            "Project",
+            "Filter",
+            "ColumnarToRow",
+            "BatchScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 7,
+            "comet_native_operators": 0,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 0,
+            "native_coverage_ratio": null,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "BatchScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "7c72a9900b2cd9dc38b4af0bb44dab8e3456aff8330f313478165b73f53f5649",
+            "schema_sha256": "99533aec19d693718a2ef9232c055e6fff3aaef6f4ad90a67802544f7c21077d",
+            "canonical_result_sha256": "d142ed2bf23aa844006c23815ed3f472b6589c6744a71967903897c11f4ea145",
+            "row_count": 16,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        },
+        "comet_accelerated": {
+          "comet_enabled": true,
+          "plan_file": "comet_accelerated/M05/final-plan.txt",
+          "plan_sha256": "65f038a142820ee65e0794a3ba5257309f690fa59485551845feb65df644edb7",
+          "semantic_sha256": "0ad6e9e9f1d1fd58d7be81dc5888f10dc077281ec688b8b68983d7ef5749dead",
+          "operator_sequence": [
+            "CometColumnarToRow",
+            "CometTakeOrderedAndProject",
+            "CometHashAggregate",
+            "CometExchange",
+            "CometHashAggregate",
+            "CometProject",
+            "CometFilter",
+            "CometIcebergNativeScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 7,
+            "comet_native_operators": 7,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 1,
+            "native_coverage_ratio": 1,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "CometIcebergNativeScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "96d12e9412a72b872c06e561008a4e14c860b60bc9e195fd35743889404c1222",
+            "schema_sha256": "99533aec19d693718a2ef9232c055e6fff3aaef6f4ad90a67802544f7c21077d",
+            "canonical_result_sha256": "d142ed2bf23aa844006c23815ed3f472b6589c6744a71967903897c11f4ea145",
+            "row_count": 16,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        }
+      }
+    },
+    "M08": {
+      "suite": "micro",
+      "inputs": {
+        "experiment_config": {
+          "path": "benchmark/configs/benchmark-laptop-m08.yaml",
+          "sha256": "665e8481287ad163b80055f3c4011376ed16b8c2e2008d61399a4bcea72b1d8a"
+        },
+        "workload_manifest": {
+          "path": "workloads/manifests/micro/M08_window.yaml",
+          "sha256": "2ac8f6125b40566dba70b96996a69b1e3c9d46d3dc510f2d46c17a4c5e06e1a6"
+        },
+        "workload_sql": {
+          "path": "workloads/micro/M08_window.sql",
+          "sha256": "b95027e94e5b23a6cc23f94d03bb342d3101f25101c98858c0ff444ecc72ae97"
+        }
+      },
+      "rendered_sql_sha256": "8bedcbb5a15070ede2dbadf03a31a383fec13da7077422b27f566136bbaef076",
+      "dataset_source_identity": {
+        "manifest_path": "data/generated/ecommerce-small-uniform-seed-20260827-v3/manifest.json",
+        "manifest_sha256": "05ab005cc05d6c95cf7e976d2ece4c7a2e6b07efa7d329a5d893d1b156686bce",
+        "dataset_id": "ecommerce-small-uniform-seed-20260827-v3",
+        "verification_scope": "Declaration only; physical data and generated manifest are not required by these regression tests."
+      },
+      "observed_schema_json": "{\"fields\":[{\"metadata\":{},\"name\":\"session_id\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"event_id\",\"nullable\":false,\"type\":\"long\"},{\"metadata\":{},\"name\":\"event_time\",\"nullable\":false,\"type\":\"timestamp\"},{\"metadata\":{},\"name\":\"event_type\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"event_rank\",\"nullable\":false,\"type\":\"integer\"}],\"type\":\"struct\"}",
+      "engines": {
+        "spark_baseline": {
+          "comet_enabled": false,
+          "plan_file": "spark_baseline/M08/final-plan.txt",
+          "plan_sha256": "9b704faf9749471540de81165360302d95a2cb03190e47b9abaa25427f8947c8",
+          "semantic_sha256": "c72759c92a52b6eec03c7f97674cef32659d55140d9612fd4beafcbd205e4e1e",
+          "operator_sequence": [
+            "TakeOrderedAndProject",
+            "Filter",
+            "Window",
+            "WindowGroupLimit",
+            "Sort",
+            "Exchange",
+            "WindowGroupLimit",
+            "Sort",
+            "Project",
+            "ColumnarToRow",
+            "BatchScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 10,
+            "comet_native_operators": 0,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 0,
+            "native_coverage_ratio": null,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "BatchScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "f2ee371b07a4ab95e639560052a962c77703ad7f9726b44b15a51fe2b443d255",
+            "schema_sha256": "93549130d6ab2e3b13e60e7ae08f15d52d3f3604b97495b3b4b852c22803afec",
+            "canonical_result_sha256": "38941cec49c385deda81a6c672019d0b7041766797b83155bb1ed2851f49491b",
+            "row_count": 5000,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        },
+        "comet_accelerated": {
+          "comet_enabled": true,
+          "plan_file": "comet_accelerated/M08/final-plan.txt",
+          "plan_sha256": "2cb5d906c0277be0b7d01c9ee99e7ecf5e4e95043ab507ddf50ec1ec1a676a4c",
+          "semantic_sha256": "6020f7b43e6bc9dbba8364365912ca8b6d48d5f001282a3d9abf71d22510d887",
+          "operator_sequence": [
+            "TakeOrderedAndProject",
+            "Filter",
+            "Window",
+            "WindowGroupLimit",
+            "CometColumnarToRow",
+            "CometSort",
+            "CometColumnarExchange",
+            "WindowGroupLimit",
+            "CometColumnarToRow",
+            "CometSort",
+            "CometProject",
+            "CometIcebergNativeScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 10,
+            "comet_native_operators": 4,
+            "spark_fallback_operators": 6,
+            "transition_count": 2,
+            "native_subtree_count": 2,
+            "native_coverage_ratio": 0.4,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "CometIcebergNativeScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "9a095bb1faae52f95b8abdddcf49ec414a1783dde256657b750fc012f862952f",
+            "schema_sha256": "93549130d6ab2e3b13e60e7ae08f15d52d3f3604b97495b3b4b852c22803afec",
+            "canonical_result_sha256": "38941cec49c385deda81a6c672019d0b7041766797b83155bb1ed2851f49491b",
+            "row_count": 5000,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        }
+      }
+    },
+    "M10": {
+      "suite": "micro",
+      "inputs": {
+        "experiment_config": {
+          "path": "benchmark/configs/benchmark-laptop-m10.yaml",
+          "sha256": "e6117d340e5468198f5f43223c22c193c346ea224319e516fe43d7e2763de5e6"
+        },
+        "workload_manifest": {
+          "path": "workloads/manifests/micro/M10_shuffle_aggregation.yaml",
+          "sha256": "e12e106255bf59134c734399e9ef3487a48c79f758bbd32da808c3e5ffc1864c"
+        },
+        "workload_sql": {
+          "path": "workloads/micro/M10_shuffle_aggregation.sql",
+          "sha256": "8bbb986155adf1ccc75a92e14f8ee4787794d4707d5cab07c6cc7516da6117d0"
+        }
+      },
+      "rendered_sql_sha256": "711af69947a6d06b797f7eb70acc230d4e9aa25bc3b48649973b128b0fedc391",
+      "dataset_source_identity": {
+        "manifest_path": "data/generated/ecommerce-small-uniform-seed-20260827-v3/manifest.json",
+        "manifest_sha256": "05ab005cc05d6c95cf7e976d2ece4c7a2e6b07efa7d329a5d893d1b156686bce",
+        "dataset_id": "ecommerce-small-uniform-seed-20260827-v3",
+        "verification_scope": "Declaration only; physical data and generated manifest are not required by these regression tests."
+      },
+      "observed_schema_json": "{\"fields\":[{\"metadata\":{},\"name\":\"session_id\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"customer_id_bucket\",\"nullable\":false,\"type\":\"long\"},{\"metadata\":{},\"name\":\"device_type\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"event_count\",\"nullable\":false,\"type\":\"long\"},{\"metadata\":{},\"name\":\"purchase_event_count\",\"nullable\":false,\"type\":\"long\"},{\"metadata\":{},\"name\":\"event_id_checksum\",\"nullable\":false,\"type\":\"long\"}],\"type\":\"struct\"}",
+      "engines": {
+        "spark_baseline": {
+          "comet_enabled": false,
+          "plan_file": "spark_baseline/M10/final-plan.txt",
+          "plan_sha256": "08ef9a5b25efdd8efd08dba5d4ec77b472d925a894f4fe326e73963cf8c238f3",
+          "semantic_sha256": "65a59b2ea84df4b2f05db11e3938700ad3ad59c77864ffe0622058d01e19569f",
+          "operator_sequence": [
+            "TakeOrderedAndProject",
+            "HashAggregate",
+            "Exchange",
+            "HashAggregate",
+            "Project",
+            "ColumnarToRow",
+            "BatchScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 6,
+            "comet_native_operators": 0,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 0,
+            "native_coverage_ratio": null,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "BatchScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "3559517b973f199d35465fb90b68f5fc655679674da15a60483b0f139fb0917b",
+            "schema_sha256": "0832d8dea49d266b76439eeb31b6648943079aa7ffe751a2f48397ee804d25ff",
+            "canonical_result_sha256": "7c5efb17509bf5445658923a8aa650506ccc36ea9ecf11cf9b3a430e7455362c",
+            "row_count": 5000,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        },
+        "comet_accelerated": {
+          "comet_enabled": true,
+          "plan_file": "comet_accelerated/M10/final-plan.txt",
+          "plan_sha256": "5fc667521c4ee83b36aef825ea35e4f1a3bde9f5a638bf4fe41363793255bba1",
+          "semantic_sha256": "b96670afc52e982e08d1f44b48fd0d52c0ccc492d83a23f41aa789870c8763de",
+          "operator_sequence": [
+            "CometColumnarToRow",
+            "CometTakeOrderedAndProject",
+            "CometHashAggregate",
+            "CometExchange",
+            "CometHashAggregate",
+            "CometProject",
+            "CometIcebergNativeScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 6,
+            "comet_native_operators": 6,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 1,
+            "native_coverage_ratio": 1,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "CometIcebergNativeScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "c9d44a6245657c34adf7feabb1fa0c60691780ae18c6ee12aa053ea093b8f709",
+            "schema_sha256": "0832d8dea49d266b76439eeb31b6648943079aa7ffe751a2f48397ee804d25ff",
+            "canonical_result_sha256": "7c5efb17509bf5445658923a8aa650506ccc36ea9ecf11cf9b3a430e7455362c",
+            "row_count": 5000,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        }
+      }
+    },
+    "B01": {
+      "suite": "business",
+      "inputs": {
+        "experiment_config": {
+          "path": "benchmark/configs/benchmark-laptop-b01.yaml",
+          "sha256": "4269620759c9bb066b87629eed5dc65f7a965ffe8f81f6a1c6dbb8f2b252f037"
+        },
+        "workload_manifest": {
+          "path": "workloads/manifests/business/B01_daily_regional_revenue.yaml",
+          "sha256": "d9ea0b0454a12aec3335e9642d4543063211c1c3776fca2fa68333cd56e98379"
+        },
+        "workload_sql": {
+          "path": "workloads/business/B01_daily_regional_revenue.sql",
+          "sha256": "38c557ab77bdeb54eafcfa5597735ef90474f0a93fd6e9c7e1f0ea31e446d1cf"
+        }
+      },
+      "rendered_sql_sha256": "56bcd7b1ec1439e70bed5a39c043985124733e8efec7df538bec6fd1d82c8159",
+      "dataset_source_identity": {
+        "manifest_path": "data/generated/ecommerce-small-uniform-seed-20260827-v3/manifest.json",
+        "manifest_sha256": "05ab005cc05d6c95cf7e976d2ece4c7a2e6b07efa7d329a5d893d1b156686bce",
+        "dataset_id": "ecommerce-small-uniform-seed-20260827-v3",
+        "verification_scope": "Declaration only; physical data and generated manifest are not required by these regression tests."
+      },
+      "observed_schema_json": "{\"fields\":[{\"metadata\":{},\"name\":\"revenue_date\",\"nullable\":false,\"type\":\"date\"},{\"metadata\":{},\"name\":\"region\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"order_count\",\"nullable\":false,\"type\":\"long\"},{\"metadata\":{},\"name\":\"gross_revenue\",\"nullable\":false,\"type\":\"decimal(38,4)\"},{\"metadata\":{},\"name\":\"discount_amount\",\"nullable\":false,\"type\":\"decimal(38,4)\"},{\"metadata\":{},\"name\":\"net_revenue\",\"nullable\":false,\"type\":\"decimal(38,4)\"}],\"type\":\"struct\"}",
+      "engines": {
+        "spark_baseline": {
+          "comet_enabled": false,
+          "plan_file": "spark_baseline/B01/final-plan.txt",
+          "plan_sha256": "8305a93839ef760abbc241fc5935b3ec536f99b3500fc845a51b2013808362ad",
+          "semantic_sha256": "f2dacde0cc397c8def1e0e5d03ce0ffd3bec24d1fc97470d5a7cb8ac8812a1f3",
+          "operator_sequence": [
+            "TakeOrderedAndProject",
+            "HashAggregate",
+            "Exchange",
+            "HashAggregate",
+            "HashAggregate",
+            "HashAggregate",
+            "Project",
+            "SortMergeJoin",
+            "Sort",
+            "Exchange",
+            "Project",
+            "BroadcastHashJoin",
+            "Project",
+            "Filter",
+            "ColumnarToRow",
+            "BatchScan",
+            "BroadcastExchange",
+            "ColumnarToRow",
+            "BatchScan",
+            "Sort",
+            "Exchange",
+            "ColumnarToRow",
+            "BatchScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 20,
+            "comet_native_operators": 0,
+            "spark_fallback_operators": 0,
+            "transition_count": 3,
+            "native_subtree_count": 0,
+            "native_coverage_ratio": null,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "BatchScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "f586df5a81ab4b63b88a76538b5ad7b6b5e3f85cbc5064f483deb22086abd9c0",
+            "schema_sha256": "c4d932c678f2d2b8f2d6d67a696a4eb5665a980a0d798503cb179a517dd4f063",
+            "canonical_result_sha256": "e4632eb38408b17b7f19eeefbf1d347d96dd5edc31dcf63a4d44bf160c28d805",
+            "row_count": 2910,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        },
+        "comet_accelerated": {
+          "comet_enabled": true,
+          "plan_file": "comet_accelerated/B01/final-plan.txt",
+          "plan_sha256": "3145bb6a8fb74c5b3d9c0ca049c4c175667b36d1ef0399cf54274a15dc348afd",
+          "semantic_sha256": "9451b31bb0c54e890e0ddeb71aa2452825f76a59a49bb8b0ad763af8c2585d1c",
+          "operator_sequence": [
+            "CometColumnarToRow",
+            "CometTakeOrderedAndProject",
+            "CometHashAggregate",
+            "CometExchange",
+            "CometHashAggregate",
+            "CometHashAggregate",
+            "CometHashAggregate",
+            "CometProject",
+            "CometSortMergeJoin",
+            "CometSort",
+            "CometExchange",
+            "CometProject",
+            "CometBroadcastHashJoin",
+            "CometProject",
+            "CometFilter",
+            "CometIcebergNativeScan",
+            "CometBroadcastExchange",
+            "CometIcebergNativeScan",
+            "CometSort",
+            "CometExchange",
+            "CometIcebergNativeScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 20,
+            "comet_native_operators": 20,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 1,
+            "native_coverage_ratio": 1,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "CometIcebergNativeScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "c4e431b5aa87c84077f5b5a9cc97ac12219b02a1a157e115b7320b908b4a3633",
+            "schema_sha256": "c4d932c678f2d2b8f2d6d67a696a4eb5665a980a0d798503cb179a517dd4f063",
+            "canonical_result_sha256": "e4632eb38408b17b7f19eeefbf1d347d96dd5edc31dcf63a4d44bf160c28d805",
+            "row_count": 2910,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        }
+      }
+    },
+    "Q01": {
+      "suite": "tpch",
+      "inputs": {
+        "experiment_config": {
+          "path": "benchmark/configs/benchmark-laptop-tpch-q01.yaml",
+          "sha256": "3e35331f207ebe118b44a1b5b83885b5194508aebaf8dc5253589e1e65248c0b"
+        },
+        "workload_manifest": {
+          "path": "workloads/manifests/tpch/Q01_pricing_summary.yaml",
+          "sha256": "b8a4a80c5d212a5e267d5668717a7a60085ec1348485d8f0fc16c11669411b99"
+        },
+        "workload_sql": {
+          "path": "workloads/tpch/Q01_pricing_summary.sql",
+          "sha256": "c40a3bc4ae587d7006ac1f05df606a138578ba24e5cfeeb884a505df886d50ad"
+        }
+      },
+      "rendered_sql_sha256": "c2a7a428f9b61c4c8b102bc64df22396ed4c88edf47ad47fc9a04e620c87344c",
+      "dataset_source_identity": {
+        "manifest_path": "data/generated/tpch-derived-sf1-v1/manifest.json",
+        "manifest_sha256": "4aff1a0bc09c2b02f09e1c91f30cb0abb287b03976c2d24c5f211c8cf068a552",
+        "dataset_id": "tpch-derived-sf1-852ad0a5ee31-v1",
+        "verification_scope": "Declaration only; physical data and generated manifest are not required by these regression tests."
+      },
+      "observed_schema_json": "{\"fields\":[{\"metadata\":{},\"name\":\"l_returnflag\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"l_linestatus\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"sum_qty\",\"nullable\":false,\"type\":\"decimal(38,2)\"},{\"metadata\":{},\"name\":\"sum_base_price\",\"nullable\":false,\"type\":\"decimal(38,2)\"},{\"metadata\":{},\"name\":\"sum_disc_price\",\"nullable\":false,\"type\":\"decimal(38,4)\"},{\"metadata\":{},\"name\":\"sum_charge\",\"nullable\":false,\"type\":\"decimal(38,6)\"},{\"metadata\":{},\"name\":\"avg_qty\",\"nullable\":false,\"type\":\"decimal(38,6)\"},{\"metadata\":{},\"name\":\"avg_price\",\"nullable\":false,\"type\":\"decimal(38,6)\"},{\"metadata\":{},\"name\":\"avg_disc\",\"nullable\":false,\"type\":\"decimal(38,6)\"},{\"metadata\":{},\"name\":\"count_order\",\"nullable\":false,\"type\":\"long\"}],\"type\":\"struct\"}",
+      "engines": {
+        "spark_baseline": {
+          "comet_enabled": false,
+          "plan_file": "spark_baseline/Q01/final-plan.txt",
+          "plan_sha256": "d33d9fc5a11b4857e1afdb0b964b40249a0f1c46cc2e48c9f4b5178eee7ef797",
+          "semantic_sha256": "cfefe14ed0daa50f03f3208f585210f6a6dc3bd913466043fa9b567fe6fb5f66",
+          "operator_sequence": [
+            "TakeOrderedAndProject",
+            "HashAggregate",
+            "Exchange",
+            "HashAggregate",
+            "Project",
+            "Filter",
+            "ColumnarToRow",
+            "BatchScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 7,
+            "comet_native_operators": 0,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 0,
+            "native_coverage_ratio": null,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "BatchScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "945e3098ce28d8ed1246b9177ad5034b9838eb86be7f1351a7d055452af8d3d7",
+            "schema_sha256": "acf69b9767044bae584ed17e4e05a97d243844e6c0e53c7d5ad6b828bbdb049f",
+            "canonical_result_sha256": "e6f521978554d4cd400649b801ed16226d9cd4bc54d13dcc8787032d185819c3",
+            "row_count": 4,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        },
+        "comet_accelerated": {
+          "comet_enabled": true,
+          "plan_file": "comet_accelerated/Q01/final-plan.txt",
+          "plan_sha256": "5f79d58c37890db0c8f4a74ae726691cc4d873ce9c6fe331b6b799f36e603ffa",
+          "semantic_sha256": "6a2c0a09fc52f5cda7cff130bb84305ddc7e0be6b2b79ceafbcbd202e69b9b5d",
+          "operator_sequence": [
+            "CometColumnarToRow",
+            "CometTakeOrderedAndProject",
+            "CometHashAggregate",
+            "CometExchange",
+            "CometHashAggregate",
+            "CometProject",
+            "CometFilter",
+            "CometIcebergNativeScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 7,
+            "comet_native_operators": 7,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 1,
+            "native_coverage_ratio": 1,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "CometIcebergNativeScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "4260b99278afbaf85813825c4da42ba2d5d2ecbe21c1e580cc9794cb6422738f",
+            "schema_sha256": "acf69b9767044bae584ed17e4e05a97d243844e6c0e53c7d5ad6b828bbdb049f",
+            "canonical_result_sha256": "e6f521978554d4cd400649b801ed16226d9cd4bc54d13dcc8787032d185819c3",
+            "row_count": 4,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        }
+      }
+    },
+    "Q03": {
+      "suite": "tpch",
+      "inputs": {
+        "experiment_config": {
+          "path": "benchmark/configs/benchmark-laptop-tpch-q03.yaml",
+          "sha256": "aba9ff67241e1e2017fa7fcf6a339fdd8ab05668b402bd5854afb0d1c46e17ce"
+        },
+        "workload_manifest": {
+          "path": "workloads/manifests/tpch/Q03_shipping_priority.yaml",
+          "sha256": "4930f9c4a9b70b7c1ef16f9d26a0d2d9ddcc1449620f937f2b10567a5114f407"
+        },
+        "workload_sql": {
+          "path": "workloads/tpch/Q03_shipping_priority.sql",
+          "sha256": "50642e93b17cc44d2122bed861ac8c6a28b1794ffb45d1329ff3926e1a3aeb23"
+        }
+      },
+      "rendered_sql_sha256": "3a4029d4112ec37b949611064c74638d5cf0dc5c5a4d37d36665e3125c84bf7f",
+      "dataset_source_identity": {
+        "manifest_path": "data/generated/tpch-derived-sf1-v1/manifest.json",
+        "manifest_sha256": "4aff1a0bc09c2b02f09e1c91f30cb0abb287b03976c2d24c5f211c8cf068a552",
+        "dataset_id": "tpch-derived-sf1-852ad0a5ee31-v1",
+        "verification_scope": "Declaration only; physical data and generated manifest are not required by these regression tests."
+      },
+      "observed_schema_json": "{\"fields\":[{\"metadata\":{},\"name\":\"l_orderkey\",\"nullable\":false,\"type\":\"long\"},{\"metadata\":{},\"name\":\"revenue\",\"nullable\":false,\"type\":\"decimal(38,4)\"},{\"metadata\":{},\"name\":\"o_orderdate\",\"nullable\":false,\"type\":\"date\"},{\"metadata\":{},\"name\":\"o_shippriority\",\"nullable\":false,\"type\":\"integer\"}],\"type\":\"struct\"}",
+      "engines": {
+        "spark_baseline": {
+          "comet_enabled": false,
+          "plan_file": "spark_baseline/Q03/final-plan.txt",
+          "plan_sha256": "f2560684d1e934177183b077f3d623f5763ec01948dbdbcee2f7ff46b1d0aead",
+          "semantic_sha256": "6cfd235095e1ebda281ad1967fb52a9f867c207815de6e7d9fcd63fca52fbb78",
+          "operator_sequence": [
+            "TakeOrderedAndProject",
+            "HashAggregate",
+            "HashAggregate",
+            "Project",
+            "BroadcastHashJoin",
+            "BroadcastExchange",
+            "Exchange",
+            "Project",
+            "BroadcastHashJoin",
+            "BroadcastExchange",
+            "Project",
+            "Filter",
+            "ColumnarToRow",
+            "BatchScan",
+            "Filter",
+            "ColumnarToRow",
+            "BatchScan",
+            "Exchange",
+            "Project",
+            "Filter",
+            "ColumnarToRow",
+            "BatchScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 19,
+            "comet_native_operators": 0,
+            "spark_fallback_operators": 0,
+            "transition_count": 3,
+            "native_subtree_count": 0,
+            "native_coverage_ratio": null,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "BatchScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "03f53acfc2408d40974f8c51d8a1e1e9617ec56513105106aa20998871ce5c85",
+            "schema_sha256": "b0901537b8f4fa4e545bcf95285b2f80e417be636fd81e4a38edbaa0f14c602a",
+            "canonical_result_sha256": "637ad75c53d9ddb37a76141fe6847f2fc3c289a7f372f25040182c3b3db2ed33",
+            "row_count": 10,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        },
+        "comet_accelerated": {
+          "comet_enabled": true,
+          "plan_file": "comet_accelerated/Q03/final-plan.txt",
+          "plan_sha256": "e161c23d4142f4767bea736aaedfebbbf4d1b58059a58c129fa64e1c70ff9929",
+          "semantic_sha256": "01c7dda99506d854a352a8b0cb23289b8470e906be1ca3954b7f3b3754fcb606",
+          "operator_sequence": [
+            "CometColumnarToRow",
+            "CometTakeOrderedAndProject",
+            "CometHashAggregate",
+            "CometHashAggregate",
+            "CometProject",
+            "CometBroadcastHashJoin",
+            "CometBroadcastExchange",
+            "CometExchange",
+            "CometProject",
+            "CometBroadcastHashJoin",
+            "CometBroadcastExchange",
+            "CometProject",
+            "CometFilter",
+            "CometIcebergNativeScan",
+            "CometFilter",
+            "CometIcebergNativeScan",
+            "CometExchange",
+            "CometProject",
+            "CometFilter",
+            "CometIcebergNativeScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 19,
+            "comet_native_operators": 19,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 1,
+            "native_coverage_ratio": 1,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "CometIcebergNativeScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "f64613c24cddd1c831699c536022624ebbccb58d37da0c6b6387787951ef0665",
+            "schema_sha256": "b0901537b8f4fa4e545bcf95285b2f80e417be636fd81e4a38edbaa0f14c602a",
+            "canonical_result_sha256": "637ad75c53d9ddb37a76141fe6847f2fc3c289a7f372f25040182c3b3db2ed33",
+            "row_count": 10,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        }
+      }
+    },
+    "Q06": {
+      "suite": "tpch",
+      "inputs": {
+        "experiment_config": {
+          "path": "benchmark/configs/benchmark-laptop-tpch-q06.yaml",
+          "sha256": "b5e2286a038469d6ba9027f8a241f88b87b6f2080d4a22bcc89e609a58f9fbcb"
+        },
+        "workload_manifest": {
+          "path": "workloads/manifests/tpch/Q06_forecast_revenue_change.yaml",
+          "sha256": "46567a93b52b1ce6c15f63539482c0c6e844c03d882ca37f983ff834300fda67"
+        },
+        "workload_sql": {
+          "path": "workloads/tpch/Q06_forecast_revenue_change.sql",
+          "sha256": "0a0d359cc3d53e1ccddd35a062998fafff4317bba337b3ed89dd505de5ee1205"
+        }
+      },
+      "rendered_sql_sha256": "43bc920e2fc72cb5c9f7bba0943cc2effa198ff82d37379d7ba6fa93fd17b90d",
+      "dataset_source_identity": {
+        "manifest_path": "data/generated/tpch-derived-sf1-v1/manifest.json",
+        "manifest_sha256": "4aff1a0bc09c2b02f09e1c91f30cb0abb287b03976c2d24c5f211c8cf068a552",
+        "dataset_id": "tpch-derived-sf1-852ad0a5ee31-v1",
+        "verification_scope": "Declaration only; physical data and generated manifest are not required by these regression tests."
+      },
+      "observed_schema_json": "{\"fields\":[{\"metadata\":{},\"name\":\"revenue\",\"nullable\":false,\"type\":\"decimal(38,4)\"}],\"type\":\"struct\"}",
+      "engines": {
+        "spark_baseline": {
+          "comet_enabled": false,
+          "plan_file": "spark_baseline/Q06/final-plan.txt",
+          "plan_sha256": "8c990b27bed4366f7f766a062fd23bbe9dc6c658211eaac53b915179150037bf",
+          "semantic_sha256": "420113645d4421e25d11b8d4e7471c4444f61ed341014894f15ed058cb4db4bd",
+          "operator_sequence": [
+            "HashAggregate",
+            "Exchange",
+            "HashAggregate",
+            "Project",
+            "Filter",
+            "ColumnarToRow",
+            "BatchScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 6,
+            "comet_native_operators": 0,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 0,
+            "native_coverage_ratio": null,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "BatchScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "f09f4d523f49e2e308a0b8406e213ab2dca5ea37cc27bbb78e0cbedeffd393cf",
+            "schema_sha256": "8df2322f8661f87afb2d36711a7261cd30bade4f88ca51c68502190040b20f5d",
+            "canonical_result_sha256": "3e15d7d1a4a48d420010152e7e9a0ee7b29476624581b5d2a9ef8bed93d22ce9",
+            "row_count": 1,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        },
+        "comet_accelerated": {
+          "comet_enabled": true,
+          "plan_file": "comet_accelerated/Q06/final-plan.txt",
+          "plan_sha256": "674f90b1de0594ad2c26b85ecba40feccd34c9b410b85c3bb3b023b87914a63e",
+          "semantic_sha256": "c8799e9d24a33e03324eaec32db10b6a52f6f2baf9e21229e3d99e342c3f9d9a",
+          "operator_sequence": [
+            "CometColumnarToRow",
+            "CometHashAggregate",
+            "CometExchange",
+            "CometHashAggregate",
+            "CometProject",
+            "CometFilter",
+            "CometIcebergNativeScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 6,
+            "comet_native_operators": 6,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 1,
+            "native_coverage_ratio": 1,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "CometIcebergNativeScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "2754a21ba5bff176798b31c4999537da09276e9af5c9c11e02a179568a3f4191",
+            "schema_sha256": "8df2322f8661f87afb2d36711a7261cd30bade4f88ca51c68502190040b20f5d",
+            "canonical_result_sha256": "3e15d7d1a4a48d420010152e7e9a0ee7b29476624581b5d2a9ef8bed93d22ce9",
+            "row_count": 1,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        }
+      }
+    },
+    "Q12": {
+      "suite": "tpch",
+      "inputs": {
+        "experiment_config": {
+          "path": "benchmark/configs/benchmark-laptop-tpch-q12.yaml",
+          "sha256": "817f7ac3131c58ceeee01e72c60a8181b3294e9765fed928b042cee98062e1f7"
+        },
+        "workload_manifest": {
+          "path": "workloads/manifests/tpch/Q12_shipping_modes_and_order_priority.yaml",
+          "sha256": "1a93120053c7e9016523f9459b3f5029c913f7199773502174e6ae5fe16f6799"
+        },
+        "workload_sql": {
+          "path": "workloads/tpch/Q12_shipping_modes_and_order_priority.sql",
+          "sha256": "a60283eaae5149ca53bfd9a3fee30aff3f23668880a8a7a141bd4e68f28a8824"
+        }
+      },
+      "rendered_sql_sha256": "67f23d4c8872b18e38db76c0216a54ec73234c1fb13c7b7a9a4ba4adf47ad6d6",
+      "dataset_source_identity": {
+        "manifest_path": "data/generated/tpch-derived-sf1-v1/manifest.json",
+        "manifest_sha256": "4aff1a0bc09c2b02f09e1c91f30cb0abb287b03976c2d24c5f211c8cf068a552",
+        "dataset_id": "tpch-derived-sf1-852ad0a5ee31-v1",
+        "verification_scope": "Declaration only; physical data and generated manifest are not required by these regression tests."
+      },
+      "observed_schema_json": "{\"fields\":[{\"metadata\":{},\"name\":\"l_shipmode\",\"nullable\":false,\"type\":\"string\"},{\"metadata\":{},\"name\":\"high_line_count\",\"nullable\":false,\"type\":\"long\"},{\"metadata\":{},\"name\":\"low_line_count\",\"nullable\":false,\"type\":\"long\"}],\"type\":\"struct\"}",
+      "engines": {
+        "spark_baseline": {
+          "comet_enabled": false,
+          "plan_file": "spark_baseline/Q12/final-plan.txt",
+          "plan_sha256": "cd01d02f50b68735be9425d609a9e74f9ef3d7bb018d12324088aa6c99a28b4a",
+          "semantic_sha256": "d16c3b206017aa92d1415b10c6ebe88cfee1ac6053d631a1e32919b876f8e425",
+          "operator_sequence": [
+            "TakeOrderedAndProject",
+            "HashAggregate",
+            "Exchange",
+            "HashAggregate",
+            "Project",
+            "BroadcastHashJoin",
+            "Exchange",
+            "ColumnarToRow",
+            "BatchScan",
+            "BroadcastExchange",
+            "Exchange",
+            "Project",
+            "Filter",
+            "ColumnarToRow",
+            "BatchScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 13,
+            "comet_native_operators": 0,
+            "spark_fallback_operators": 0,
+            "transition_count": 2,
+            "native_subtree_count": 0,
+            "native_coverage_ratio": null,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "BatchScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "fbd77f8ffdf16d443abae17b949900ccc7d7137afcd887cdbeb659f0c70d81d9",
+            "schema_sha256": "7a18417b97b3b4088a6914e90470504849fd088488357fb6d517e30a52ac032a",
+            "canonical_result_sha256": "2cdc1b58c97297c5deacd77b7a765143d30aa9f969f1a9fafecbdb8721dd7382",
+            "row_count": 2,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        },
+        "comet_accelerated": {
+          "comet_enabled": true,
+          "plan_file": "comet_accelerated/Q12/final-plan.txt",
+          "plan_sha256": "3952f3422803bdcd5fbad6bcf00626a0f18afd2948fd5e2ff07c7765db6d8a8c",
+          "semantic_sha256": "91f86e8f4e5af476744fa80b8176a58db48af52c534984cb72390766e00728b6",
+          "operator_sequence": [
+            "CometColumnarToRow",
+            "CometTakeOrderedAndProject",
+            "CometHashAggregate",
+            "CometExchange",
+            "CometHashAggregate",
+            "CometProject",
+            "CometBroadcastHashJoin",
+            "CometExchange",
+            "CometIcebergNativeScan",
+            "CometBroadcastExchange",
+            "CometExchange",
+            "CometProject",
+            "CometFilter",
+            "CometIcebergNativeScan"
+          ],
+          "expected_analysis": {
+            "status": "complete",
+            "total_operators": 13,
+            "comet_native_operators": 13,
+            "spark_fallback_operators": 0,
+            "transition_count": 1,
+            "native_subtree_count": 1,
+            "native_coverage_ratio": 1,
+            "fallback_reasons": [],
+            "unknown_nodes": [],
+            "scan_implementations": [
+              "CometIcebergNativeScan"
+            ]
+          },
+          "diagnostic_observation": {
+            "publishable": false,
+            "source_result_sha256": "bee7bbf70416888ce09cc4f80cefd1c5fc05f9b64a6669a6aad8060e5c3f8ffd",
+            "schema_sha256": "7a18417b97b3b4088a6914e90470504849fd088488357fb6d517e30a52ac032a",
+            "canonical_result_sha256": "2cdc1b58c97297c5deacd77b7a765143d30aa9f969f1a9fafecbdb8721dd7382",
+            "row_count": 2,
+            "schema_matches": true,
+            "captured_status": "passed"
+          }
+        }
+      }
+    }
+  }
+}

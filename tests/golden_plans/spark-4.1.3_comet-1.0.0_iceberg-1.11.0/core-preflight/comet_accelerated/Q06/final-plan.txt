@@ -1,0 +1,18 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 1
+   +- *(1) CometColumnarToRow
+      +- CometHashAggregate [sum#356, isEmpty#357], [Final], [sum(cast((l_extendedprice#337 * l_discount#338) as decimal(20,4)))]
+         +- ShuffleQueryStage 0
+            +- CometExchange SinglePartition, ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=2136]
+               +- CometHashAggregate [l_extendedprice#337, l_discount#338], [Partial], [partial_sum(cast((l_extendedprice#337 * l_discount#338) as decimal(20,4)))]
+                  +- CometProject [l_extendedprice#337, l_discount#338], [l_extendedprice#337, l_discount#338]
+                     +- CometFilter [l_quantity#336, l_extendedprice#337, l_discount#338, l_shipdate#342], (((((l_shipdate#342 >= 1994-01-01) AND (l_shipdate#342 < 1995-01-01)) AND (l_discount#338 >= 0.05)) AND (l_discount#338 <= 0.07)) AND (l_quantity#336 < 24.00))
+                        +- CometIcebergNativeScan [l_quantity#336, l_extendedprice#337, l_discount#338, l_shipdate#342], s3://lakehouse/warehouse/tpch/lineitem/metadata/00001-c2d38331-589b-4c29-8064-689a065dbefb.metadata.json, IcebergScan(table=lakehouse.tpch.lineitem, schemaId=0, snapshotId=5437091732438207599, branch=null, filters=l_shipdate >= 8766, l_shipdate < 9131, l_discount >= 0.05, l_discount <= 0.07, l_quantity < 24.00, runtimeFilters=, groupedBy=), 2
++- == Initial Plan ==
+   CometHashAggregate [sum#356, isEmpty#357], [Final], [sum(cast((l_extendedprice#337 * l_discount#338) as decimal(20,4)))]
+   +- CometExchange SinglePartition, ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=2136]
+      +- CometHashAggregate [l_extendedprice#337, l_discount#338], [Partial], [partial_sum(cast((l_extendedprice#337 * l_discount#338) as decimal(20,4)))]
+         +- CometProject [l_extendedprice#337, l_discount#338], [l_extendedprice#337, l_discount#338]
+            +- CometFilter [l_quantity#336, l_extendedprice#337, l_discount#338, l_shipdate#342], (((((l_shipdate#342 >= 1994-01-01) AND (l_shipdate#342 < 1995-01-01)) AND (l_discount#338 >= 0.05)) AND (l_discount#338 <= 0.07)) AND (l_quantity#336 < 24.00))
+               +- CometIcebergNativeScan [l_quantity#336, l_extendedprice#337, l_discount#338, l_shipdate#342], s3://lakehouse/warehouse/tpch/lineitem/metadata/00001-c2d38331-589b-4c29-8064-689a065dbefb.metadata.json, IcebergScan(table=lakehouse.tpch.lineitem, schemaId=0, snapshotId=5437091732438207599, branch=null, filters=l_shipdate >= 8766, l_shipdate < 9131, l_discount >= 0.05, l_discount <= 0.07, l_quantity < 24.00, runtimeFilters=, groupedBy=), 2

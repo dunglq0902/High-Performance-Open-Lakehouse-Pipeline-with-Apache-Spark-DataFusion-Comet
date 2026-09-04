@@ -1,0 +1,18 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 1
+   +- *(1) CometColumnarToRow
+      +- CometTakeOrderedAndProjectExec(limit=1000, offset=0, orderBy=[order_id#16L ASC NULLS FIRST,line_number#17 ASC NULLS FIRST,product_id#18L ASC NULLS FIRST], output=[order_id#16L,line_number#17,product_id#18L,product_name#23,category#24,quantity#19,unit_price#20,discount#21])
+         +- CometProject [order_id#16L, line_number#17, product_id#18L, product_name#23, category#24, quantity#19, unit_price#20, discount#21], [order_id#16L, line_number#17, product_id#18L, product_name#23, category#24, quantity#19, unit_price#20, discount#21]
+            +- CometBroadcastHashJoin [product_id#18L], [product_id#22L], Inner, BuildRight
+               :- CometIcebergNativeScan [order_id#16L, line_number#17, product_id#18L, quantity#19, unit_price#20, discount#21], s3://lakehouse/warehouse/bronze/order_items/metadata/00001-b6c1a84b-27c2-4ed9-99cd-a2bd9b83f5f1.metadata.json, IcebergScan(table=lakehouse.bronze.order_items, schemaId=0, snapshotId=3772749778805410248, branch=null, filters=, runtimeFilters=, groupedBy=), 2
+               +- BroadcastQueryStage 0
+                  +- CometBroadcastExchange [product_id#22L, product_name#23, category#24]
+                     +- CometIcebergNativeScan [product_id#22L, product_name#23, category#24], s3://lakehouse/warehouse/bronze/products/metadata/00001-ff403952-69ad-43fe-8512-68baeee5d7d7.metadata.json, IcebergScan(table=lakehouse.bronze.products, schemaId=0, snapshotId=2962113728502753737, branch=null, filters=, runtimeFilters=, groupedBy=), 1
++- == Initial Plan ==
+   CometTakeOrderedAndProjectExec(limit=1000, offset=0, orderBy=[order_id#16L ASC NULLS FIRST,line_number#17 ASC NULLS FIRST,product_id#18L ASC NULLS FIRST], output=[order_id#16L,line_number#17,product_id#18L,product_name#23,category#24,quantity#19,unit_price#20,discount#21])
+   +- CometProject [order_id#16L, line_number#17, product_id#18L, product_name#23, category#24, quantity#19, unit_price#20, discount#21], [order_id#16L, line_number#17, product_id#18L, product_name#23, category#24, quantity#19, unit_price#20, discount#21]
+      +- CometBroadcastHashJoin [product_id#18L], [product_id#22L], Inner, BuildRight
+         :- CometIcebergNativeScan [order_id#16L, line_number#17, product_id#18L, quantity#19, unit_price#20, discount#21], s3://lakehouse/warehouse/bronze/order_items/metadata/00001-b6c1a84b-27c2-4ed9-99cd-a2bd9b83f5f1.metadata.json, IcebergScan(table=lakehouse.bronze.order_items, schemaId=0, snapshotId=3772749778805410248, branch=null, filters=, runtimeFilters=, groupedBy=), 2
+         +- CometBroadcastExchange [product_id#22L, product_name#23, category#24]
+            +- CometIcebergNativeScan [product_id#22L, product_name#23, category#24], s3://lakehouse/warehouse/bronze/products/metadata/00001-ff403952-69ad-43fe-8512-68baeee5d7d7.metadata.json, IcebergScan(table=lakehouse.bronze.products, schemaId=0, snapshotId=2962113728502753737, branch=null, filters=, runtimeFilters=, groupedBy=), 1

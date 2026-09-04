@@ -1,0 +1,21 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 1
+   +- *(1) CometColumnarToRow
+      +- CometTakeOrderedAndProjectExec(limit=32, offset=0, orderBy=[status#39 ASC NULLS FIRST,payment_method#40 ASC NULLS FIRST], output=[status#39,payment_method#40,order_count#41L,order_id_checksum#42L])
+         +- CometHashAggregate [status#39, payment_method#40, count#51L, sum#52L], [Final], [status#39, payment_method#40], [count(1), sum(order_id#36L)]
+            +- AQEShuffleRead coalesced
+               +- ShuffleQueryStage 0
+                  +- CometExchange hashpartitioning(status#39, payment_method#40, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=243]
+                     +- CometHashAggregate [order_id#36L, status#39, payment_method#40], [Partial], [status#39, payment_method#40], [partial_count(1), partial_sum(order_id#36L)]
+                        +- CometProject [order_id#36L, status#39, payment_method#40], [order_id#36L, status#39, payment_method#40]
+                           +- CometFilter [order_id#36L, order_time#38, status#39, payment_method#40], ((order_time#38 >= 2025-01-01 00:00:00) AND (order_time#38 < 2026-01-01 00:00:00))
+                              +- CometIcebergNativeScan [order_id#36L, order_time#38, status#39, payment_method#40], s3://lakehouse/warehouse/bronze/orders/metadata/00023-acc9261b-14ab-493b-bfdb-a02f951533ed.metadata.json, IcebergScan(table=lakehouse.bronze.orders, schemaId=1, snapshotId=2905106192513243873, branch=null, filters=order_time >= 1735689600000000, order_time < 1767225600000000, runtimeFilters=, groupedBy=), 12
++- == Initial Plan ==
+   CometTakeOrderedAndProjectExec(limit=32, offset=0, orderBy=[status#39 ASC NULLS FIRST,payment_method#40 ASC NULLS FIRST], output=[status#39,payment_method#40,order_count#41L,order_id_checksum#42L])
+   +- CometHashAggregate [status#39, payment_method#40, count#51L, sum#52L], [Final], [status#39, payment_method#40], [count(1), sum(order_id#36L)]
+      +- CometExchange hashpartitioning(status#39, payment_method#40, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=243]
+         +- CometHashAggregate [order_id#36L, status#39, payment_method#40], [Partial], [status#39, payment_method#40], [partial_count(1), partial_sum(order_id#36L)]
+            +- CometProject [order_id#36L, status#39, payment_method#40], [order_id#36L, status#39, payment_method#40]
+               +- CometFilter [order_id#36L, order_time#38, status#39, payment_method#40], ((order_time#38 >= 2025-01-01 00:00:00) AND (order_time#38 < 2026-01-01 00:00:00))
+                  +- CometIcebergNativeScan [order_id#36L, order_time#38, status#39, payment_method#40], s3://lakehouse/warehouse/bronze/orders/metadata/00023-acc9261b-14ab-493b-bfdb-a02f951533ed.metadata.json, IcebergScan(table=lakehouse.bronze.orders, schemaId=1, snapshotId=2905106192513243873, branch=null, filters=order_time >= 1735689600000000, order_time < 1767225600000000, runtimeFilters=, groupedBy=), 12

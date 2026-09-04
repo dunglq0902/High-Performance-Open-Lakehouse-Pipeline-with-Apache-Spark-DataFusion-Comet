@@ -1,0 +1,18 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 1
+   +- *(2) HashAggregate(keys=[], functions=[sum(cast((l_extendedprice#503 * l_discount#504) as decimal(20,4)))], output=[revenue#514])
+      +- ShuffleQueryStage 0
+         +- Exchange SinglePartition, ENSURE_REQUIREMENTS, [plan_id=1203]
+            +- *(1) HashAggregate(keys=[], functions=[partial_sum(cast((l_extendedprice#503 * l_discount#504) as decimal(20,4)))], output=[sum#522, isEmpty#523])
+               +- *(1) Project [l_extendedprice#503, l_discount#504]
+                  +- *(1) Filter (((((l_shipdate#508 >= 1994-01-01) AND (l_shipdate#508 < 1995-01-01)) AND (l_discount#504 >= 0.05)) AND (l_discount#504 <= 0.07)) AND (l_quantity#502 < 24.00))
+                     +- *(1) ColumnarToRow
+                        +- BatchScan lakehouse.tpch.lineitem[l_quantity#502, l_extendedprice#503, l_discount#504, l_shipdate#508] IcebergScan(table=lakehouse.tpch.lineitem, schemaId=0, snapshotId=5437091732438207599, branch=null, filters=l_shipdate >= 8766, l_shipdate < 9131, l_discount >= 0.05, l_discount <= 0.07, l_quantity < 24.00, runtimeFilters=, groupedBy=) RuntimeFilters: []
++- == Initial Plan ==
+   HashAggregate(keys=[], functions=[sum(cast((l_extendedprice#503 * l_discount#504) as decimal(20,4)))], output=[revenue#514])
+   +- Exchange SinglePartition, ENSURE_REQUIREMENTS, [plan_id=1183]
+      +- HashAggregate(keys=[], functions=[partial_sum(cast((l_extendedprice#503 * l_discount#504) as decimal(20,4)))], output=[sum#522, isEmpty#523])
+         +- Project [l_extendedprice#503, l_discount#504]
+            +- Filter (((((l_shipdate#508 >= 1994-01-01) AND (l_shipdate#508 < 1995-01-01)) AND (l_discount#504 >= 0.05)) AND (l_discount#504 <= 0.07)) AND (l_quantity#502 < 24.00))
+               +- BatchScan lakehouse.tpch.lineitem[l_quantity#502, l_extendedprice#503, l_discount#504, l_shipdate#508] IcebergScan(table=lakehouse.tpch.lineitem, schemaId=0, snapshotId=5437091732438207599, branch=null, filters=l_shipdate >= 8766, l_shipdate < 9131, l_discount >= 0.05, l_discount <= 0.07, l_quantity < 24.00, runtimeFilters=, groupedBy=) RuntimeFilters: []

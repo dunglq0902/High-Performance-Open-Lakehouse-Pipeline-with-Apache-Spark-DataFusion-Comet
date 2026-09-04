@@ -1,0 +1,52 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 4
+   +- TakeOrderedAndProject(limit=10, orderBy=[revenue#481 DESC NULLS LAST,o_orderdate#460 ASC NULLS FIRST,l_orderkey#465L ASC NULLS FIRST,o_shippriority#463 ASC NULLS FIRST], output=[l_orderkey#465L,revenue#481,o_orderdate#460,o_shippriority#463])
+      +- *(4) HashAggregate(keys=[l_orderkey#465L, o_orderdate#460, o_shippriority#463], functions=[sum(revenue_line#482)], output=[l_orderkey#465L, revenue#481, o_orderdate#460, o_shippriority#463])
+         +- *(4) HashAggregate(keys=[l_orderkey#465L, o_orderdate#460, o_shippriority#463], functions=[partial_sum(revenue_line#482)], output=[l_orderkey#465L, o_orderdate#460, o_shippriority#463, sum#496, isEmpty#497])
+            +- *(4) Project [l_orderkey#465L, o_orderdate#460, o_shippriority#463, cast((l_extendedprice#470 * (1.00 - l_discount#471)) as decimal(20,4)) AS revenue_line#482]
+               +- *(4) BroadcastHashJoin [o_orderkey#456L], [l_orderkey#465L], Inner, BuildLeft, false
+                  :- BroadcastQueryStage 3
+                  :  +- BroadcastExchange HashedRelationBroadcastMode(List(input[0, bigint, false]),false), [plan_id=1119]
+                  :     +- AQEShuffleRead local
+                  :        +- ShuffleQueryStage 2
+                  :           +- Exchange hashpartitioning(o_orderkey#456L, 16), ENSURE_REQUIREMENTS, [plan_id=1075]
+                  :              +- *(3) Project [o_orderkey#456L, o_orderdate#460, o_shippriority#463]
+                  :                 +- *(3) BroadcastHashJoin [c_custkey#448L], [o_custkey#457L], Inner, BuildLeft, false
+                  :                    :- BroadcastQueryStage 0
+                  :                    :  +- BroadcastExchange HashedRelationBroadcastMode(List(input[0, bigint, false]),false), [plan_id=943]
+                  :                    :     +- *(1) Project [c_custkey#448L]
+                  :                    :        +- *(1) Filter (c_mktsegment#454 = BUILDING)
+                  :                    :           +- *(1) ColumnarToRow
+                  :                    :              +- BatchScan lakehouse.tpch.customer[c_custkey#448L, c_mktsegment#454] IcebergScan(table=lakehouse.tpch.customer, schemaId=0, snapshotId=4853557306529383209, branch=null, filters=c_mktsegment = 'BUILDING', runtimeFilters=, groupedBy=) RuntimeFilters: []
+                  :                    +- *(3) Filter (o_orderdate#460 < 1995-03-15)
+                  :                       +- *(3) ColumnarToRow
+                  :                          +- BatchScan lakehouse.tpch.orders[o_orderkey#456L, o_custkey#457L, o_orderdate#460, o_shippriority#463] IcebergScan(table=lakehouse.tpch.orders, schemaId=0, snapshotId=16669299233395393, branch=null, filters=o_orderdate < 9204, runtimeFilters=, groupedBy=) RuntimeFilters: []
+                  +- AQEShuffleRead coalesced
+                     +- ShuffleQueryStage 1
+                        +- Exchange hashpartitioning(l_orderkey#465L, 16), ENSURE_REQUIREMENTS, [plan_id=971]
+                           +- *(2) Project [l_orderkey#465L, l_extendedprice#470, l_discount#471]
+                              +- *(2) Filter (l_shipdate#475 > 1995-03-15)
+                                 +- *(2) ColumnarToRow
+                                    +- BatchScan lakehouse.tpch.lineitem[l_orderkey#465L, l_extendedprice#470, l_discount#471, l_shipdate#475] IcebergScan(table=lakehouse.tpch.lineitem, schemaId=0, snapshotId=5437091732438207599, branch=null, filters=l_shipdate > 9204, runtimeFilters=, groupedBy=) RuntimeFilters: []
++- == Initial Plan ==
+   TakeOrderedAndProject(limit=10, orderBy=[revenue#481 DESC NULLS LAST,o_orderdate#460 ASC NULLS FIRST,l_orderkey#465L ASC NULLS FIRST,o_shippriority#463 ASC NULLS FIRST], output=[l_orderkey#465L,revenue#481,o_orderdate#460,o_shippriority#463])
+   +- HashAggregate(keys=[l_orderkey#465L, o_orderdate#460, o_shippriority#463], functions=[sum(revenue_line#482)], output=[l_orderkey#465L, revenue#481, o_orderdate#460, o_shippriority#463])
+      +- HashAggregate(keys=[l_orderkey#465L, o_orderdate#460, o_shippriority#463], functions=[partial_sum(revenue_line#482)], output=[l_orderkey#465L, o_orderdate#460, o_shippriority#463, sum#496, isEmpty#497])
+         +- Project [l_orderkey#465L, o_orderdate#460, o_shippriority#463, cast((l_extendedprice#470 * (1.00 - l_discount#471)) as decimal(20,4)) AS revenue_line#482]
+            +- SortMergeJoin [o_orderkey#456L], [l_orderkey#465L], Inner
+               :- Sort [o_orderkey#456L ASC NULLS FIRST], false, 0
+               :  +- Exchange hashpartitioning(o_orderkey#456L, 16), ENSURE_REQUIREMENTS, [plan_id=912]
+               :     +- Project [o_orderkey#456L, o_orderdate#460, o_shippriority#463]
+               :        +- BroadcastHashJoin [c_custkey#448L], [o_custkey#457L], Inner, BuildLeft, false
+               :           :- BroadcastExchange HashedRelationBroadcastMode(List(input[0, bigint, false]),false), [plan_id=907]
+               :           :  +- Project [c_custkey#448L]
+               :           :     +- Filter (c_mktsegment#454 = BUILDING)
+               :           :        +- BatchScan lakehouse.tpch.customer[c_custkey#448L, c_mktsegment#454] IcebergScan(table=lakehouse.tpch.customer, schemaId=0, snapshotId=4853557306529383209, branch=null, filters=c_mktsegment = 'BUILDING', runtimeFilters=, groupedBy=) RuntimeFilters: []
+               :           +- Filter (o_orderdate#460 < 1995-03-15)
+               :              +- BatchScan lakehouse.tpch.orders[o_orderkey#456L, o_custkey#457L, o_orderdate#460, o_shippriority#463] IcebergScan(table=lakehouse.tpch.orders, schemaId=0, snapshotId=16669299233395393, branch=null, filters=o_orderdate < 9204, runtimeFilters=, groupedBy=) RuntimeFilters: []
+               +- Sort [l_orderkey#465L ASC NULLS FIRST], false, 0
+                  +- Exchange hashpartitioning(l_orderkey#465L, 16), ENSURE_REQUIREMENTS, [plan_id=913]
+                     +- Project [l_orderkey#465L, l_extendedprice#470, l_discount#471]
+                        +- Filter (l_shipdate#475 > 1995-03-15)
+                           +- BatchScan lakehouse.tpch.lineitem[l_orderkey#465L, l_extendedprice#470, l_discount#471, l_shipdate#475] IcebergScan(table=lakehouse.tpch.lineitem, schemaId=0, snapshotId=5437091732438207599, branch=null, filters=l_shipdate > 9204, runtimeFilters=, groupedBy=) RuntimeFilters: []

@@ -1,0 +1,54 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 4
+   +- TakeOrderedAndProject(limit=5000, orderBy=[revenue_date#123 ASC NULLS FIRST,region#110 ASC NULLS FIRST], output=[revenue_date#123,region#110,order_count#119L,gross_revenue#120,discount_amount#121,net_revenue#122])
+      +- *(7) HashAggregate(keys=[revenue_date#123, region#110], functions=[sum(gross_line_revenue#124), sum(discount_line_amount#125), sum(net_line_revenue#126), count(distinct order_id#102L)], output=[revenue_date#123, region#110, order_count#119L, gross_revenue#120, discount_amount#121, net_revenue#122])
+         +- AQEShuffleRead coalesced
+            +- ShuffleQueryStage 3
+               +- Exchange hashpartitioning(revenue_date#123, region#110, 16), ENSURE_REQUIREMENTS, [plan_id=739]
+                  +- *(6) HashAggregate(keys=[revenue_date#123, region#110], functions=[merge_sum(gross_line_revenue#124), merge_sum(discount_line_amount#125), merge_sum(net_line_revenue#126), partial_count(distinct order_id#102L)], output=[revenue_date#123, region#110, sum#143, isEmpty#144, sum#147, isEmpty#148, sum#151, isEmpty#152, count#155L])
+                     +- *(6) HashAggregate(keys=[revenue_date#123, region#110, order_id#102L], functions=[merge_sum(gross_line_revenue#124), merge_sum(discount_line_amount#125), merge_sum(net_line_revenue#126)], output=[revenue_date#123, region#110, order_id#102L, sum#143, isEmpty#144, sum#147, isEmpty#148, sum#151, isEmpty#152])
+                        +- *(6) HashAggregate(keys=[revenue_date#123, region#110, order_id#102L], functions=[partial_sum(gross_line_revenue#124), partial_sum(discount_line_amount#125), partial_sum(net_line_revenue#126)], output=[revenue_date#123, region#110, order_id#102L, sum#143, isEmpty#144, sum#147, isEmpty#148, sum#151, isEmpty#152])
+                           +- *(6) Project [cast(order_time#104 as date) AS revenue_date#123, region#110, order_id#102L, cast((cast(quantity#116 as decimal(10,0)) * unit_price#117) as decimal(20,4)) AS gross_line_revenue#124, cast(((cast(quantity#116 as decimal(10,0)) * unit_price#117) * discount#118) as decimal(20,4)) AS discount_line_amount#125, cast(((cast(quantity#116 as decimal(10,0)) * unit_price#117) * (1.0000 - discount#118)) as decimal(20,4)) AS net_line_revenue#126]
+                              +- *(6) SortMergeJoin [order_id#102L], [order_id#113L], Inner
+                                 :- *(4) Sort [order_id#102L ASC NULLS FIRST], false, 0
+                                 :  +- AQEShuffleRead coalesced
+                                 :     +- ShuffleQueryStage 2
+                                 :        +- Exchange hashpartitioning(order_id#102L, 16), ENSURE_REQUIREMENTS, [plan_id=643]
+                                 :           +- *(3) Project [order_id#102L, order_time#104, region#110]
+                                 :              +- *(3) BroadcastHashJoin [customer_id#103L], [customer_id#107L], Inner, BuildRight, false
+                                 :                 :- *(3) Project [order_id#102L, customer_id#103L, order_time#104]
+                                 :                 :  +- *(3) Filter (((status#105 = COMPLETED) AND (order_time#104 >= 2025-01-01 00:00:00)) AND (order_time#104 < 2026-01-01 00:00:00))
+                                 :                 :     +- *(3) ColumnarToRow
+                                 :                 :        +- BatchScan lakehouse.bronze.orders[order_id#102L, customer_id#103L, order_time#104, status#105] IcebergScan(table=lakehouse.bronze.orders, schemaId=1, snapshotId=2905106192513243873, branch=null, filters=status = 'COMPLETED', order_time >= 1735689600000000, order_time < 1767225600000000, runtimeFilters=, groupedBy=) RuntimeFilters: []
+                                 :                 +- BroadcastQueryStage 0
+                                 :                    +- BroadcastExchange HashedRelationBroadcastMode(List(input[0, bigint, false]),false), [plan_id=459]
+                                 :                       +- *(1) ColumnarToRow
+                                 :                          +- BatchScan lakehouse.bronze.customers[customer_id#107L, region#110] IcebergScan(table=lakehouse.bronze.customers, schemaId=0, snapshotId=6149636589958574772, branch=null, filters=, runtimeFilters=, groupedBy=) RuntimeFilters: []
+                                 +- *(5) Sort [order_id#113L ASC NULLS FIRST], false, 0
+                                    +- AQEShuffleRead coalesced
+                                       +- ShuffleQueryStage 1
+                                          +- Exchange hashpartitioning(order_id#113L, 16), ENSURE_REQUIREMENTS, [plan_id=474]
+                                             +- *(2) ColumnarToRow
+                                                +- BatchScan lakehouse.bronze.order_items[order_id#113L, quantity#116, unit_price#117, discount#118] IcebergScan(table=lakehouse.bronze.order_items, schemaId=0, snapshotId=3772749778805410248, branch=null, filters=, runtimeFilters=, groupedBy=) RuntimeFilters: []
++- == Initial Plan ==
+   TakeOrderedAndProject(limit=5000, orderBy=[revenue_date#123 ASC NULLS FIRST,region#110 ASC NULLS FIRST], output=[revenue_date#123,region#110,order_count#119L,gross_revenue#120,discount_amount#121,net_revenue#122])
+   +- HashAggregate(keys=[revenue_date#123, region#110], functions=[sum(gross_line_revenue#124), sum(discount_line_amount#125), sum(net_line_revenue#126), count(distinct order_id#102L)], output=[revenue_date#123, region#110, order_count#119L, gross_revenue#120, discount_amount#121, net_revenue#122])
+      +- Exchange hashpartitioning(revenue_date#123, region#110, 16), ENSURE_REQUIREMENTS, [plan_id=421]
+         +- HashAggregate(keys=[revenue_date#123, region#110], functions=[merge_sum(gross_line_revenue#124), merge_sum(discount_line_amount#125), merge_sum(net_line_revenue#126), partial_count(distinct order_id#102L)], output=[revenue_date#123, region#110, sum#143, isEmpty#144, sum#147, isEmpty#148, sum#151, isEmpty#152, count#155L])
+            +- HashAggregate(keys=[revenue_date#123, region#110, order_id#102L], functions=[merge_sum(gross_line_revenue#124), merge_sum(discount_line_amount#125), merge_sum(net_line_revenue#126)], output=[revenue_date#123, region#110, order_id#102L, sum#143, isEmpty#144, sum#147, isEmpty#148, sum#151, isEmpty#152])
+               +- HashAggregate(keys=[revenue_date#123, region#110, order_id#102L], functions=[partial_sum(gross_line_revenue#124), partial_sum(discount_line_amount#125), partial_sum(net_line_revenue#126)], output=[revenue_date#123, region#110, order_id#102L, sum#143, isEmpty#144, sum#147, isEmpty#148, sum#151, isEmpty#152])
+                  +- Project [cast(order_time#104 as date) AS revenue_date#123, region#110, order_id#102L, cast((cast(quantity#116 as decimal(10,0)) * unit_price#117) as decimal(20,4)) AS gross_line_revenue#124, cast(((cast(quantity#116 as decimal(10,0)) * unit_price#117) * discount#118) as decimal(20,4)) AS discount_line_amount#125, cast(((cast(quantity#116 as decimal(10,0)) * unit_price#117) * (1.0000 - discount#118)) as decimal(20,4)) AS net_line_revenue#126]
+                     +- SortMergeJoin [order_id#102L], [order_id#113L], Inner
+                        :- Sort [order_id#102L ASC NULLS FIRST], false, 0
+                        :  +- Exchange hashpartitioning(order_id#102L, 16), ENSURE_REQUIREMENTS, [plan_id=411]
+                        :     +- Project [order_id#102L, order_time#104, region#110]
+                        :        +- BroadcastHashJoin [customer_id#103L], [customer_id#107L], Inner, BuildRight, false
+                        :           :- Project [order_id#102L, customer_id#103L, order_time#104]
+                        :           :  +- Filter (((status#105 = COMPLETED) AND (order_time#104 >= 2025-01-01 00:00:00)) AND (order_time#104 < 2026-01-01 00:00:00))
+                        :           :     +- BatchScan lakehouse.bronze.orders[order_id#102L, customer_id#103L, order_time#104, status#105] IcebergScan(table=lakehouse.bronze.orders, schemaId=1, snapshotId=2905106192513243873, branch=null, filters=status = 'COMPLETED', order_time >= 1735689600000000, order_time < 1767225600000000, runtimeFilters=, groupedBy=) RuntimeFilters: []
+                        :           +- BroadcastExchange HashedRelationBroadcastMode(List(input[0, bigint, false]),false), [plan_id=406]
+                        :              +- BatchScan lakehouse.bronze.customers[customer_id#107L, region#110] IcebergScan(table=lakehouse.bronze.customers, schemaId=0, snapshotId=6149636589958574772, branch=null, filters=, runtimeFilters=, groupedBy=) RuntimeFilters: []
+                        +- Sort [order_id#113L ASC NULLS FIRST], false, 0
+                           +- Exchange hashpartitioning(order_id#113L, 16), ENSURE_REQUIREMENTS, [plan_id=412]
+                              +- BatchScan lakehouse.bronze.order_items[order_id#113L, quantity#116, unit_price#117, discount#118] IcebergScan(table=lakehouse.bronze.order_items, schemaId=0, snapshotId=3772749778805410248, branch=null, filters=, runtimeFilters=, groupedBy=) RuntimeFilters: []

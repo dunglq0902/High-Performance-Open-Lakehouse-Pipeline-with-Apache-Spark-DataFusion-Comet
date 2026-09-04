@@ -1,0 +1,19 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 1
+   +- TakeOrderedAndProject(limit=5000, orderBy=[event_count#79L DESC NULLS LAST,session_id#71 ASC NULLS FIRST,customer_id_bucket#78L ASC NULLS FIRST,device_type#77 ASC NULLS FIRST], output=[session_id#71,customer_id_bucket#78L,device_type#77,event_count#79L,purchase_event_count#80L,event_id_checksum#81L])
+      +- *(2) HashAggregate(keys=[session_id#71, _groupingexpression#85L, device_type#77], functions=[count(1), sum(CASE WHEN (event_type#74 = purchase) THEN 1 ELSE 0 END), sum(event_id#70L)], output=[session_id#71, customer_id_bucket#78L, device_type#77, event_count#79L, purchase_event_count#80L, event_id_checksum#81L])
+         +- AQEShuffleRead coalesced
+            +- ShuffleQueryStage 0
+               +- Exchange hashpartitioning(session_id#71, _groupingexpression#85L, device_type#77, 16), ENSURE_REQUIREMENTS, [plan_id=326]
+                  +- *(1) HashAggregate(keys=[session_id#71, _groupingexpression#85L, device_type#77], functions=[partial_count(1), partial_sum(CASE WHEN (event_type#74 = purchase) THEN 1 ELSE 0 END), partial_sum(event_id#70L)], output=[session_id#71, _groupingexpression#85L, device_type#77, count#95L, sum#96L, sum#97L])
+                     +- *(1) Project [event_id#70L, session_id#71, event_type#74, device_type#77, coalesce(customer_id#72L, -1) AS _groupingexpression#85L]
+                        +- *(1) ColumnarToRow
+                           +- BatchScan lakehouse.bronze.events[event_id#70L, session_id#71, customer_id#72L, event_time#73, event_type#74, device_type#77] IcebergScan(table=lakehouse.bronze.events, schemaId=0, snapshotId=592568026003381846, branch=null, filters=event_time >= 1735689600000000, event_time < 1767225600000000, runtimeFilters=, groupedBy=) RuntimeFilters: []
++- == Initial Plan ==
+   TakeOrderedAndProject(limit=5000, orderBy=[event_count#79L DESC NULLS LAST,session_id#71 ASC NULLS FIRST,customer_id_bucket#78L ASC NULLS FIRST,device_type#77 ASC NULLS FIRST], output=[session_id#71,customer_id_bucket#78L,device_type#77,event_count#79L,purchase_event_count#80L,event_id_checksum#81L])
+   +- HashAggregate(keys=[session_id#71, _groupingexpression#85L, device_type#77], functions=[count(1), sum(CASE WHEN (event_type#74 = purchase) THEN 1 ELSE 0 END), sum(event_id#70L)], output=[session_id#71, customer_id_bucket#78L, device_type#77, event_count#79L, purchase_event_count#80L, event_id_checksum#81L])
+      +- Exchange hashpartitioning(session_id#71, _groupingexpression#85L, device_type#77, 16), ENSURE_REQUIREMENTS, [plan_id=308]
+         +- HashAggregate(keys=[session_id#71, _groupingexpression#85L, device_type#77], functions=[partial_count(1), partial_sum(CASE WHEN (event_type#74 = purchase) THEN 1 ELSE 0 END), partial_sum(event_id#70L)], output=[session_id#71, _groupingexpression#85L, device_type#77, count#95L, sum#96L, sum#97L])
+            +- Project [event_id#70L, session_id#71, event_type#74, device_type#77, coalesce(customer_id#72L, -1) AS _groupingexpression#85L]
+               +- BatchScan lakehouse.bronze.events[event_id#70L, session_id#71, customer_id#72L, event_time#73, event_type#74, device_type#77] IcebergScan(table=lakehouse.bronze.events, schemaId=0, snapshotId=592568026003381846, branch=null, filters=event_time >= 1735689600000000, event_time < 1767225600000000, runtimeFilters=, groupedBy=) RuntimeFilters: []

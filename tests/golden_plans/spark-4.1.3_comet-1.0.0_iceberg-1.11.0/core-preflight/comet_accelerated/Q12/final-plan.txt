@@ -1,0 +1,39 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 4
+   +- *(1) CometColumnarToRow
+      +- CometTakeOrderedAndProjectExec(limit=10, offset=0, orderBy=[l_shipmode#381 ASC NULLS FIRST], output=[l_shipmode#381,high_line_count#383L,low_line_count#384L])
+         +- CometHashAggregate [l_shipmode#381, sum#396L, sum#397L], [Final], [l_shipmode#381], [sum(CASE WHEN o_orderpriority#363 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END), sum(CASE WHEN NOT o_orderpriority#363 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END)]
+            +- AQEShuffleRead coalesced
+               +- ShuffleQueryStage 3
+                  +- CometExchange hashpartitioning(l_shipmode#381, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=2584]
+                     +- CometHashAggregate [o_orderpriority#363, l_shipmode#381], [Partial], [l_shipmode#381], [partial_sum(CASE WHEN o_orderpriority#363 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END), partial_sum(CASE WHEN NOT o_orderpriority#363 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END)]
+                        +- CometProject [o_orderpriority#363, l_shipmode#381], [o_orderpriority#363, l_shipmode#381]
+                           +- CometBroadcastHashJoin [o_orderkey#358L], [l_orderkey#367L], Inner, BuildRight
+                              :- AQEShuffleRead coalesced
+                              :  +- ShuffleQueryStage 0
+                              :     +- CometExchange hashpartitioning(o_orderkey#358L, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=2277]
+                              :        +- CometIcebergNativeScan [o_orderkey#358L, o_orderpriority#363], s3://lakehouse/warehouse/tpch/orders/metadata/00001-d3a4c19c-bf81-4ac9-bb24-585e259f4e7b.metadata.json, IcebergScan(table=lakehouse.tpch.orders, schemaId=0, snapshotId=16669299233395393, branch=null, filters=, runtimeFilters=, groupedBy=), 2
+                              +- BroadcastQueryStage 2
+                                 +- CometBroadcastExchange [l_orderkey#367L, l_shipmode#381]
+                                    +- AQEShuffleRead local
+                                       +- ShuffleQueryStage 1
+                                          +- CometExchange hashpartitioning(l_orderkey#367L, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=2281]
+                                             +- CometProject [l_orderkey#367L, l_shipmode#381], [l_orderkey#367L, l_shipmode#381]
+                                                +- CometFilter [l_orderkey#367L, l_shipdate#377, l_commitdate#378, l_receiptdate#379, l_shipmode#381], ((((l_shipmode#381 IN (MAIL,SHIP) AND (l_commitdate#378 < l_receiptdate#379)) AND (l_shipdate#377 < l_commitdate#378)) AND (l_receiptdate#379 >= 1994-01-01)) AND (l_receiptdate#379 < 1995-01-01))
+                                                   +- CometIcebergNativeScan [l_orderkey#367L, l_shipdate#377, l_commitdate#378, l_receiptdate#379, l_shipmode#381], s3://lakehouse/warehouse/tpch/lineitem/metadata/00001-c2d38331-589b-4c29-8064-689a065dbefb.metadata.json, IcebergScan(table=lakehouse.tpch.lineitem, schemaId=0, snapshotId=5437091732438207599, branch=null, filters=l_shipmode IN ('MAIL', 'SHIP'), l_receiptdate >= 8766, l_receiptdate < 9131, runtimeFilters=, groupedBy=), 2
++- == Initial Plan ==
+   CometTakeOrderedAndProjectExec(limit=10, offset=0, orderBy=[l_shipmode#381 ASC NULLS FIRST], output=[l_shipmode#381,high_line_count#383L,low_line_count#384L])
+   +- CometHashAggregate [l_shipmode#381, sum#396L, sum#397L], [Final], [l_shipmode#381], [sum(CASE WHEN o_orderpriority#363 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END), sum(CASE WHEN NOT o_orderpriority#363 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END)]
+      +- CometExchange hashpartitioning(l_shipmode#381, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=2286]
+         +- CometHashAggregate [o_orderpriority#363, l_shipmode#381], [Partial], [l_shipmode#381], [partial_sum(CASE WHEN o_orderpriority#363 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END), partial_sum(CASE WHEN NOT o_orderpriority#363 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END)]
+            +- CometProject [o_orderpriority#363, l_shipmode#381], [o_orderpriority#363, l_shipmode#381]
+               +- CometSortMergeJoin [o_orderkey#358L], [l_orderkey#367L], Inner
+                  :- CometSort [o_orderkey#358L, o_orderpriority#363], [o_orderkey#358L ASC NULLS FIRST]
+                  :  +- CometExchange hashpartitioning(o_orderkey#358L, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=2277]
+                  :     +- CometIcebergNativeScan [o_orderkey#358L, o_orderpriority#363], s3://lakehouse/warehouse/tpch/orders/metadata/00001-d3a4c19c-bf81-4ac9-bb24-585e259f4e7b.metadata.json, IcebergScan(table=lakehouse.tpch.orders, schemaId=0, snapshotId=16669299233395393, branch=null, filters=, runtimeFilters=, groupedBy=), 2
+                  +- CometSort [l_orderkey#367L, l_shipmode#381], [l_orderkey#367L ASC NULLS FIRST]
+                     +- CometExchange hashpartitioning(l_orderkey#367L, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=2281]
+                        +- CometProject [l_orderkey#367L, l_shipmode#381], [l_orderkey#367L, l_shipmode#381]
+                           +- CometFilter [l_orderkey#367L, l_shipdate#377, l_commitdate#378, l_receiptdate#379, l_shipmode#381], ((((l_shipmode#381 IN (MAIL,SHIP) AND (l_commitdate#378 < l_receiptdate#379)) AND (l_shipdate#377 < l_commitdate#378)) AND (l_receiptdate#379 >= 1994-01-01)) AND (l_receiptdate#379 < 1995-01-01))
+                              +- CometIcebergNativeScan [l_orderkey#367L, l_shipdate#377, l_commitdate#378, l_receiptdate#379, l_shipmode#381], s3://lakehouse/warehouse/tpch/lineitem/metadata/00001-c2d38331-589b-4c29-8064-689a065dbefb.metadata.json, IcebergScan(table=lakehouse.tpch.lineitem, schemaId=0, snapshotId=5437091732438207599, branch=null, filters=l_shipmode IN ('MAIL', 'SHIP'), l_receiptdate >= 8766, l_receiptdate < 9131, runtimeFilters=, groupedBy=), 2

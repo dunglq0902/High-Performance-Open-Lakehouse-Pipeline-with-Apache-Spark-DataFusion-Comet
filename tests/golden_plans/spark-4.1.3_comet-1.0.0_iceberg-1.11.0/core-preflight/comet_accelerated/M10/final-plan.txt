@@ -1,0 +1,19 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 1
+   +- *(1) CometColumnarToRow
+      +- CometTakeOrderedAndProjectExec(limit=5000, offset=0, orderBy=[event_count#76L DESC NULLS LAST,session_id#68 ASC NULLS FIRST,customer_id_bucket#75L ASC NULLS FIRST,device_type#74 ASC NULLS FIRST], output=[session_id#68,customer_id_bucket#75L,device_type#74,event_count#76L,purchase_event_count#77L,event_id_checksum#78L])
+         +- CometHashAggregate [session_id#68, _groupingexpression#82L, device_type#74, count#92L, sum#93L, sum#94L], [Final], [session_id#68, _groupingexpression#82L, device_type#74], [count(1), sum(CASE WHEN (event_type#71 = purchase) THEN 1 ELSE 0 END), sum(event_id#67L)]
+            +- AQEShuffleRead coalesced
+               +- ShuffleQueryStage 0
+                  +- CometExchange hashpartitioning(session_id#68, _groupingexpression#82L, device_type#74, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=522]
+                     +- CometHashAggregate [event_id#67L, session_id#68, event_type#71, device_type#74, _groupingexpression#82L], [Partial], [session_id#68, _groupingexpression#82L, device_type#74], [partial_count(1), partial_sum(CASE WHEN (event_type#71 = purchase) THEN 1 ELSE 0 END), partial_sum(event_id#67L)]
+                        +- CometProject [event_id#67L, session_id#68, event_type#71, device_type#74, _groupingexpression#82L], [event_id#67L, session_id#68, event_type#71, device_type#74, coalesce(customer_id#69L, -1) AS _groupingexpression#82L]
+                           +- CometIcebergNativeScan [event_id#67L, session_id#68, customer_id#69L, event_time#70, event_type#71, device_type#74], s3://lakehouse/warehouse/bronze/events/metadata/00001-68a4d1d2-f64a-48b1-9074-518926a903ff.metadata.json, IcebergScan(table=lakehouse.bronze.events, schemaId=0, snapshotId=592568026003381846, branch=null, filters=event_time >= 1735689600000000, event_time < 1767225600000000, runtimeFilters=, groupedBy=), 12
++- == Initial Plan ==
+   CometTakeOrderedAndProjectExec(limit=5000, offset=0, orderBy=[event_count#76L DESC NULLS LAST,session_id#68 ASC NULLS FIRST,customer_id_bucket#75L ASC NULLS FIRST,device_type#74 ASC NULLS FIRST], output=[session_id#68,customer_id_bucket#75L,device_type#74,event_count#76L,purchase_event_count#77L,event_id_checksum#78L])
+   +- CometHashAggregate [session_id#68, _groupingexpression#82L, device_type#74, count#92L, sum#93L, sum#94L], [Final], [session_id#68, _groupingexpression#82L, device_type#74], [count(1), sum(CASE WHEN (event_type#71 = purchase) THEN 1 ELSE 0 END), sum(event_id#67L)]
+      +- CometExchange hashpartitioning(session_id#68, _groupingexpression#82L, device_type#74, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=522]
+         +- CometHashAggregate [event_id#67L, session_id#68, event_type#71, device_type#74, _groupingexpression#82L], [Partial], [session_id#68, _groupingexpression#82L, device_type#74], [partial_count(1), partial_sum(CASE WHEN (event_type#71 = purchase) THEN 1 ELSE 0 END), partial_sum(event_id#67L)]
+            +- CometProject [event_id#67L, session_id#68, event_type#71, device_type#74, _groupingexpression#82L], [event_id#67L, session_id#68, event_type#71, device_type#74, coalesce(customer_id#69L, -1) AS _groupingexpression#82L]
+               +- CometIcebergNativeScan [event_id#67L, session_id#68, customer_id#69L, event_time#70, event_type#71, device_type#74], s3://lakehouse/warehouse/bronze/events/metadata/00001-68a4d1d2-f64a-48b1-9074-518926a903ff.metadata.json, IcebergScan(table=lakehouse.bronze.events, schemaId=0, snapshotId=592568026003381846, branch=null, filters=event_time >= 1735689600000000, event_time < 1767225600000000, runtimeFilters=, groupedBy=), 12

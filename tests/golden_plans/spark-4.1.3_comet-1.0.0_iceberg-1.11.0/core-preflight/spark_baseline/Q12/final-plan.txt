@@ -1,0 +1,40 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 4
+   +- TakeOrderedAndProject(limit=10, orderBy=[l_shipmode#551 ASC NULLS FIRST], output=[l_shipmode#551,high_line_count#553L,low_line_count#554L])
+      +- *(4) HashAggregate(keys=[l_shipmode#551], functions=[sum(CASE WHEN o_orderpriority#533 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END), sum(CASE WHEN NOT o_orderpriority#533 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END)], output=[l_shipmode#551, high_line_count#553L, low_line_count#554L])
+         +- AQEShuffleRead coalesced
+            +- ShuffleQueryStage 3
+               +- Exchange hashpartitioning(l_shipmode#551, 16), ENSURE_REQUIREMENTS, [plan_id=1451]
+                  +- *(3) HashAggregate(keys=[l_shipmode#551], functions=[partial_sum(CASE WHEN o_orderpriority#533 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END), partial_sum(CASE WHEN NOT o_orderpriority#533 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END)], output=[l_shipmode#551, sum#566L, sum#567L])
+                     +- *(3) Project [o_orderpriority#533, l_shipmode#551]
+                        +- *(3) BroadcastHashJoin [o_orderkey#528L], [l_orderkey#537L], Inner, BuildRight, false
+                           :- AQEShuffleRead local
+                           :  +- ShuffleQueryStage 0
+                           :     +- Exchange hashpartitioning(o_orderkey#528L, 16), ENSURE_REQUIREMENTS, [plan_id=1293]
+                           :        +- *(1) ColumnarToRow
+                           :           +- BatchScan lakehouse.tpch.orders[o_orderkey#528L, o_orderpriority#533] IcebergScan(table=lakehouse.tpch.orders, schemaId=0, snapshotId=16669299233395393, branch=null, filters=, runtimeFilters=, groupedBy=) RuntimeFilters: []
+                           +- BroadcastQueryStage 2
+                              +- BroadcastExchange HashedRelationBroadcastMode(List(input[0, bigint, false]),false), [plan_id=1399]
+                                 +- AQEShuffleRead local
+                                    +- ShuffleQueryStage 1
+                                       +- Exchange hashpartitioning(l_orderkey#537L, 16), ENSURE_REQUIREMENTS, [plan_id=1309]
+                                          +- *(2) Project [l_orderkey#537L, l_shipmode#551]
+                                             +- *(2) Filter ((((l_shipmode#551 IN (MAIL,SHIP) AND (l_commitdate#548 < l_receiptdate#549)) AND (l_shipdate#547 < l_commitdate#548)) AND (l_receiptdate#549 >= 1994-01-01)) AND (l_receiptdate#549 < 1995-01-01))
+                                                +- *(2) ColumnarToRow
+                                                   +- BatchScan lakehouse.tpch.lineitem[l_orderkey#537L, l_shipdate#547, l_commitdate#548, l_receiptdate#549, l_shipmode#551] IcebergScan(table=lakehouse.tpch.lineitem, schemaId=0, snapshotId=5437091732438207599, branch=null, filters=l_shipmode IN ('MAIL', 'SHIP'), l_receiptdate >= 8766, l_receiptdate < 9131, runtimeFilters=, groupedBy=) RuntimeFilters: []
++- == Initial Plan ==
+   TakeOrderedAndProject(limit=10, orderBy=[l_shipmode#551 ASC NULLS FIRST], output=[l_shipmode#551,high_line_count#553L,low_line_count#554L])
+   +- HashAggregate(keys=[l_shipmode#551], functions=[sum(CASE WHEN o_orderpriority#533 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END), sum(CASE WHEN NOT o_orderpriority#533 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END)], output=[l_shipmode#551, high_line_count#553L, low_line_count#554L])
+      +- Exchange hashpartitioning(l_shipmode#551, 16), ENSURE_REQUIREMENTS, [plan_id=1265]
+         +- HashAggregate(keys=[l_shipmode#551], functions=[partial_sum(CASE WHEN o_orderpriority#533 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END), partial_sum(CASE WHEN NOT o_orderpriority#533 IN (1-URGENT,2-HIGH) THEN 1 ELSE 0 END)], output=[l_shipmode#551, sum#566L, sum#567L])
+            +- Project [o_orderpriority#533, l_shipmode#551]
+               +- SortMergeJoin [o_orderkey#528L], [l_orderkey#537L], Inner
+                  :- Sort [o_orderkey#528L ASC NULLS FIRST], false, 0
+                  :  +- Exchange hashpartitioning(o_orderkey#528L, 16), ENSURE_REQUIREMENTS, [plan_id=1257]
+                  :     +- BatchScan lakehouse.tpch.orders[o_orderkey#528L, o_orderpriority#533] IcebergScan(table=lakehouse.tpch.orders, schemaId=0, snapshotId=16669299233395393, branch=null, filters=, runtimeFilters=, groupedBy=) RuntimeFilters: []
+                  +- Sort [l_orderkey#537L ASC NULLS FIRST], false, 0
+                     +- Exchange hashpartitioning(l_orderkey#537L, 16), ENSURE_REQUIREMENTS, [plan_id=1258]
+                        +- Project [l_orderkey#537L, l_shipmode#551]
+                           +- Filter ((((l_shipmode#551 IN (MAIL,SHIP) AND (l_commitdate#548 < l_receiptdate#549)) AND (l_shipdate#547 < l_commitdate#548)) AND (l_receiptdate#549 >= 1994-01-01)) AND (l_receiptdate#549 < 1995-01-01))
+                              +- BatchScan lakehouse.tpch.lineitem[l_orderkey#537L, l_shipdate#547, l_commitdate#548, l_receiptdate#549, l_shipmode#551] IcebergScan(table=lakehouse.tpch.lineitem, schemaId=0, snapshotId=5437091732438207599, branch=null, filters=l_shipmode IN ('MAIL', 'SHIP'), l_receiptdate >= 8766, l_receiptdate < 9131, runtimeFilters=, groupedBy=) RuntimeFilters: []

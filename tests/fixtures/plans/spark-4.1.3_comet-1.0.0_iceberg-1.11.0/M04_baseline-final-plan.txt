@@ -1,0 +1,19 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 1
+   +- TakeOrderedAndProject(limit=1000, orderBy=[order_id#0L ASC NULLS FIRST,line_number#1 ASC NULLS FIRST,product_id#2L ASC NULLS FIRST], output=[order_id#0L,line_number#1,product_id#2L,product_name#7,category#8,quantity#3,unit_price#4,discount#5])
+      +- *(2) Project [order_id#0L, line_number#1, product_id#2L, product_name#7, category#8, quantity#3, unit_price#4, discount#5]
+         +- *(2) BroadcastHashJoin [product_id#2L], [product_id#6L], Inner, BuildRight, false
+            :- *(2) ColumnarToRow
+            :  +- BatchScan lakehouse.bronze.order_items[order_id#0L, line_number#1, product_id#2L, quantity#3, unit_price#4, discount#5] IcebergScan(table=lakehouse.bronze.order_items, schemaId=0, snapshotId=3772749778805410248, branch=null, filters=, runtimeFilters=, groupedBy=) RuntimeFilters: []
+            +- BroadcastQueryStage 0
+               +- BroadcastExchange HashedRelationBroadcastMode(List(input[0, bigint, false]),false), [plan_id=36]
+                  +- *(1) ColumnarToRow
+                     +- BatchScan lakehouse.bronze.products[product_id#6L, product_name#7, category#8] IcebergScan(table=lakehouse.bronze.products, schemaId=0, snapshotId=2962113728502753737, branch=null, filters=, runtimeFilters=, groupedBy=) RuntimeFilters: []
++- == Initial Plan ==
+   TakeOrderedAndProject(limit=1000, orderBy=[order_id#0L ASC NULLS FIRST,line_number#1 ASC NULLS FIRST,product_id#2L ASC NULLS FIRST], output=[order_id#0L,line_number#1,product_id#2L,product_name#7,category#8,quantity#3,unit_price#4,discount#5])
+   +- Project [order_id#0L, line_number#1, product_id#2L, product_name#7, category#8, quantity#3, unit_price#4, discount#5]
+      +- BroadcastHashJoin [product_id#2L], [product_id#6L], Inner, BuildRight, false
+         :- BatchScan lakehouse.bronze.order_items[order_id#0L, line_number#1, product_id#2L, quantity#3, unit_price#4, discount#5] IcebergScan(table=lakehouse.bronze.order_items, schemaId=0, snapshotId=3772749778805410248, branch=null, filters=, runtimeFilters=, groupedBy=) RuntimeFilters: []
+         +- BroadcastExchange HashedRelationBroadcastMode(List(input[0, bigint, false]),false), [plan_id=25]
+            +- BatchScan lakehouse.bronze.products[product_id#6L, product_name#7, category#8] IcebergScan(table=lakehouse.bronze.products, schemaId=0, snapshotId=2962113728502753737, branch=null, filters=, runtimeFilters=, groupedBy=) RuntimeFilters: []

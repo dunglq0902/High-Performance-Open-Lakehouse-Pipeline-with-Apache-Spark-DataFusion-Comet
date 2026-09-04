@@ -1,0 +1,21 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 1
+   +- TakeOrderedAndProject(limit=32, orderBy=[status#40 ASC NULLS FIRST,payment_method#41 ASC NULLS FIRST], output=[status#40,payment_method#41,order_count#42L,order_id_checksum#43L])
+      +- *(2) HashAggregate(keys=[status#40, payment_method#41], functions=[count(1), sum(order_id#37L)], output=[status#40, payment_method#41, order_count#42L, order_id_checksum#43L])
+         +- AQEShuffleRead coalesced
+            +- ShuffleQueryStage 0
+               +- Exchange hashpartitioning(status#40, payment_method#41, 16), ENSURE_REQUIREMENTS, [plan_id=167]
+                  +- *(1) HashAggregate(keys=[status#40, payment_method#41], functions=[partial_count(1), partial_sum(order_id#37L)], output=[status#40, payment_method#41, count#52L, sum#53L])
+                     +- *(1) Project [order_id#37L, status#40, payment_method#41]
+                        +- *(1) Filter ((order_time#39 >= 2025-01-01 00:00:00) AND (order_time#39 < 2026-01-01 00:00:00))
+                           +- *(1) ColumnarToRow
+                              +- BatchScan lakehouse.bronze.orders[order_id#37L, order_time#39, status#40, payment_method#41] IcebergScan(table=lakehouse.bronze.orders, schemaId=1, snapshotId=2905106192513243873, branch=null, filters=order_time >= 1735689600000000, order_time < 1767225600000000, runtimeFilters=, groupedBy=) RuntimeFilters: []
++- == Initial Plan ==
+   TakeOrderedAndProject(limit=32, orderBy=[status#40 ASC NULLS FIRST,payment_method#41 ASC NULLS FIRST], output=[status#40,payment_method#41,order_count#42L,order_id_checksum#43L])
+   +- HashAggregate(keys=[status#40, payment_method#41], functions=[count(1), sum(order_id#37L)], output=[status#40, payment_method#41, order_count#42L, order_id_checksum#43L])
+      +- Exchange hashpartitioning(status#40, payment_method#41, 16), ENSURE_REQUIREMENTS, [plan_id=145]
+         +- HashAggregate(keys=[status#40, payment_method#41], functions=[partial_count(1), partial_sum(order_id#37L)], output=[status#40, payment_method#41, count#52L, sum#53L])
+            +- Project [order_id#37L, status#40, payment_method#41]
+               +- Filter ((order_time#39 >= 2025-01-01 00:00:00) AND (order_time#39 < 2026-01-01 00:00:00))
+                  +- BatchScan lakehouse.bronze.orders[order_id#37L, order_time#39, status#40, payment_method#41] IcebergScan(table=lakehouse.bronze.orders, schemaId=1, snapshotId=2905106192513243873, branch=null, filters=order_time >= 1735689600000000, order_time < 1767225600000000, runtimeFilters=, groupedBy=) RuntimeFilters: []

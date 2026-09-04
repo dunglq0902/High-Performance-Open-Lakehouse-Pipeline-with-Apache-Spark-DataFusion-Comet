@@ -1,4 +1,4 @@
-# Implementation status — 2026-09-04
+# Implementation status — 2026-09-05
 
 The research software and both primary datasets are implemented and materialized. The primary
 E-commerce dataset is revision v3, generated from a reviewed clean generator commit.
@@ -69,6 +69,12 @@ publishable.
 - Spark event-log attribution by measured `jobGroupId`, 200-ms worker/driver resource sampling,
   collector calibration below 2%, conservative final-AQE plan analysis, exact result hashes,
   descriptive statistics, paired speedups/resources, and deterministic bootstrap 95% CIs.
+- Plan classification uses reviewed exact operator names after package/`Exec` normalization.
+  Spark `BroadcastExchange` is a real operator, not a wrapper. Comet's JVM
+  `CometColumnarExchange` counts as non-native fallback, while data-conversion nodes count as
+  transitions. Empty plans, unconfirmed/unfinished adaptive trees (including nested retained
+  trees), unparseable content, planning placeholders, and unknown lookalike names cannot pass
+  admission. The fail-closed campaign and publication gates remain unchanged.
 - Rebuildable Markdown, JSON, CSV, and SVG reporting. `make report` is fail-closed: publication
   requires exactly the ten current core campaigns, the latest verification attempt for each to
   pass 24/24, all correctness/plan gates, ten complete Spark/Comet pairs per workload, complete
@@ -134,6 +140,21 @@ all four reviewed TPC-H-derived queries.
 Those artifacts prove readiness and the Spark/Comet/Iceberg vertical slice, not primary
 performance. This document likewise makes no claim that the ten core campaigns have passed; only
 the latest strict report publishability artifact may make that determination.
+
+The diagnostic preflight in `.artifacts/diagnostics/plan-preflight-20260904-01/` executed all ten
+core workloads in both engines. Every pair matched schema, row count, and canonical result hash.
+These were shared-session, non-publishable diagnostic runs, not the independent paired performance
+campaigns. Its original comparison used an earlier parser; the retained plans are reviewed again
+under the corrected classifier. The versioned core plan regression corpus records all twenty
+captured final AQE plans and their reviewed analyses, alongside exact runtime/config/SQL/workload
+identities. In the observed M08 Comet plan, four of ten operators are native and six are non-native;
+this is an operator-count ratio, not a timing or speedup claim.
+
+The shuffle distinction follows the locked Comet source's
+[native versus JVM shuffle branches](https://github.com/apache/datafusion-comet/blob/3a7a2c437cc771621b6040a308657573dbc1b9c2/spark/src/main/scala/org/apache/spark/sql/comet/execution/shuffle/CometShuffleExchangeExec.scala).
+Earlier M02 measurements and the M04 parser rejection are preserved as historical evidence. A
+committed parser correction requires fresh current-commit campaigns; neither an old failure nor
+an old successful raw record is rewritten or relabeled to satisfy publication.
 
 ## Shortest reviewed campaign workflow
 

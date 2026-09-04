@@ -1,0 +1,28 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 1
+   +- TakeOrderedAndProject(limit=5000, orderBy=[session_id#54 ASC NULLS FIRST,event_rank#61 ASC NULLS FIRST,event_time#56 ASC NULLS FIRST,event_id#53L ASC NULLS FIRST], output=[session_id#54,event_id#53L,event_time#56,event_type#57,event_rank#61])
+      +- *(3) Filter (event_rank#61 <= 4)
+         +- Window [row_number() windowspecdefinition(session_id#54, event_time#56 ASC NULLS FIRST, event_id#53L ASC NULLS FIRST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS event_rank#61], [session_id#54], [event_time#56 ASC NULLS FIRST, event_id#53L ASC NULLS FIRST]
+            +- WindowGroupLimit [session_id#54], [event_time#56 ASC NULLS FIRST, event_id#53L ASC NULLS FIRST], row_number(), 4, Final
+               +- *(2) CometColumnarToRow
+                  +- CometSort [session_id#54, event_id#53L, event_time#56, event_type#57], [session_id#54 ASC NULLS FIRST, event_time#56 ASC NULLS FIRST, event_id#53L ASC NULLS FIRST]
+                     +- AQEShuffleRead coalesced
+                        +- ShuffleQueryStage 0
+                           +- CometColumnarExchange hashpartitioning(session_id#54, 16), ENSURE_REQUIREMENTS, CometColumnarShuffle, [plan_id=397]
+                              +- WindowGroupLimit [session_id#54], [event_time#56 ASC NULLS FIRST, event_id#53L ASC NULLS FIRST], row_number(), 4, Partial
+                                 +- *(1) CometColumnarToRow
+                                    +- CometSort [session_id#54, event_id#53L, event_time#56, event_type#57], [session_id#54 ASC NULLS FIRST, event_time#56 ASC NULLS FIRST, event_id#53L ASC NULLS FIRST]
+                                       +- CometProject [session_id#54, event_id#53L, event_time#56, event_type#57], [session_id#54, event_id#53L, event_time#56, event_type#57]
+                                          +- CometIcebergNativeScan [event_id#53L, session_id#54, event_time#56, event_type#57], s3://lakehouse/warehouse/bronze/events/metadata/00001-68a4d1d2-f64a-48b1-9074-518926a903ff.metadata.json, IcebergScan(table=lakehouse.bronze.events, schemaId=0, snapshotId=592568026003381846, branch=null, filters=event_time >= 1735689600000000, event_time < 1767225600000000, runtimeFilters=, groupedBy=), 12
++- == Initial Plan ==
+   TakeOrderedAndProject(limit=5000, orderBy=[session_id#54 ASC NULLS FIRST,event_rank#61 ASC NULLS FIRST,event_time#56 ASC NULLS FIRST,event_id#53L ASC NULLS FIRST], output=[session_id#54,event_id#53L,event_time#56,event_type#57,event_rank#61])
+   +- Filter (event_rank#61 <= 4)
+      +- Window [row_number() windowspecdefinition(session_id#54, event_time#56 ASC NULLS FIRST, event_id#53L ASC NULLS FIRST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS event_rank#61], [session_id#54], [event_time#56 ASC NULLS FIRST, event_id#53L ASC NULLS FIRST]
+         +- WindowGroupLimit [session_id#54], [event_time#56 ASC NULLS FIRST, event_id#53L ASC NULLS FIRST], row_number(), 4, Final
+            +- CometSort [session_id#54, event_id#53L, event_time#56, event_type#57], [session_id#54 ASC NULLS FIRST, event_time#56 ASC NULLS FIRST, event_id#53L ASC NULLS FIRST]
+               +- CometColumnarExchange hashpartitioning(session_id#54, 16), ENSURE_REQUIREMENTS, CometColumnarShuffle, [plan_id=364]
+                  +- WindowGroupLimit [session_id#54], [event_time#56 ASC NULLS FIRST, event_id#53L ASC NULLS FIRST], row_number(), 4, Partial
+                     +- CometSort [session_id#54, event_id#53L, event_time#56, event_type#57], [session_id#54 ASC NULLS FIRST, event_time#56 ASC NULLS FIRST, event_id#53L ASC NULLS FIRST]
+                        +- CometProject [session_id#54, event_id#53L, event_time#56, event_type#57], [session_id#54, event_id#53L, event_time#56, event_type#57]
+                           +- CometIcebergNativeScan [event_id#53L, session_id#54, event_time#56, event_type#57], s3://lakehouse/warehouse/bronze/events/metadata/00001-68a4d1d2-f64a-48b1-9074-518926a903ff.metadata.json, IcebergScan(table=lakehouse.bronze.events, schemaId=0, snapshotId=592568026003381846, branch=null, filters=event_time >= 1735689600000000, event_time < 1767225600000000, runtimeFilters=, groupedBy=), 12

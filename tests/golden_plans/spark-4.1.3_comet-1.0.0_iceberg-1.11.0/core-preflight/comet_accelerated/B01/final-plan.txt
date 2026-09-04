@@ -1,0 +1,52 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 4
+   +- *(1) CometColumnarToRow
+      +- CometTakeOrderedAndProjectExec(limit=5000, offset=0, orderBy=[revenue_date#116 ASC NULLS FIRST,region#103 ASC NULLS FIRST], output=[revenue_date#116,region#103,order_count#112L,gross_revenue#113,discount_amount#114,net_revenue#115])
+         +- CometHashAggregate [revenue_date#116, region#103, sum#136, isEmpty#137, sum#140, isEmpty#141, sum#144, isEmpty#145, count#148L], [Final], [revenue_date#116, region#103], [sum(gross_line_revenue#117), sum(discount_line_amount#118), sum(net_line_revenue#119), count(distinct order_id#95L)]
+            +- AQEShuffleRead coalesced
+               +- ShuffleQueryStage 3
+                  +- CometExchange hashpartitioning(revenue_date#116, region#103, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=1316]
+                     +- CometHashAggregate [revenue_date#116, region#103, order_id#95L, sum#136, isEmpty#137, sum#140, isEmpty#141, sum#144, isEmpty#145], [PartialMerge, Partial], [revenue_date#116, region#103], [merge_sum(gross_line_revenue#117), merge_sum(discount_line_amount#118), merge_sum(net_line_revenue#119), partial_count(distinct order_id#95L)]
+                        +- CometHashAggregate [revenue_date#116, region#103, order_id#95L, sum#136, isEmpty#137, sum#140, isEmpty#141, sum#144, isEmpty#145], [PartialMerge], [revenue_date#116, region#103, order_id#95L], [merge_sum(gross_line_revenue#117), merge_sum(discount_line_amount#118), merge_sum(net_line_revenue#119)]
+                           +- CometHashAggregate [revenue_date#116, region#103, order_id#95L, gross_line_revenue#117, discount_line_amount#118, net_line_revenue#119], [Partial], [revenue_date#116, region#103, order_id#95L], [partial_sum(gross_line_revenue#117), partial_sum(discount_line_amount#118), partial_sum(net_line_revenue#119)]
+                              +- CometProject [revenue_date#116, region#103, order_id#95L, gross_line_revenue#117, discount_line_amount#118, net_line_revenue#119], [cast(order_time#97 as date) AS revenue_date#116, region#103, order_id#95L, cast((cast(quantity#109 as decimal(10,0)) * unit_price#110) as decimal(20,4)) AS gross_line_revenue#117, cast(((cast(quantity#109 as decimal(10,0)) * unit_price#110) * discount#111) as decimal(20,4)) AS discount_line_amount#118, cast(((cast(quantity#109 as decimal(10,0)) * unit_price#110) * (1.0000 - discount#111)) as decimal(20,4)) AS net_line_revenue#119]
+                                 +- CometSortMergeJoin [order_id#95L], [order_id#106L], Inner
+                                    :- CometSort [order_id#95L, order_time#97, region#103], [order_id#95L ASC NULLS FIRST]
+                                    :  +- AQEShuffleRead coalesced
+                                    :     +- ShuffleQueryStage 2
+                                    :        +- CometExchange hashpartitioning(order_id#95L, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=1159]
+                                    :           +- CometProject [order_id#95L, order_time#97, region#103], [order_id#95L, order_time#97, region#103]
+                                    :              +- CometBroadcastHashJoin [customer_id#96L], [customer_id#100L], Inner, BuildRight
+                                    :                 :- CometProject [order_id#95L, customer_id#96L, order_time#97], [order_id#95L, customer_id#96L, order_time#97]
+                                    :                 :  +- CometFilter [order_id#95L, customer_id#96L, order_time#97, status#98], (((status#98 = COMPLETED) AND (order_time#97 >= 2025-01-01 00:00:00)) AND (order_time#97 < 2026-01-01 00:00:00))
+                                    :                 :     +- CometIcebergNativeScan [order_id#95L, customer_id#96L, order_time#97, status#98], s3://lakehouse/warehouse/bronze/orders/metadata/00023-acc9261b-14ab-493b-bfdb-a02f951533ed.metadata.json, IcebergScan(table=lakehouse.bronze.orders, schemaId=1, snapshotId=2905106192513243873, branch=null, filters=status = 'COMPLETED', order_time >= 1735689600000000, order_time < 1767225600000000, runtimeFilters=, groupedBy=), 12
+                                    :                 +- BroadcastQueryStage 0
+                                    :                    +- CometBroadcastExchange [customer_id#100L, region#103]
+                                    :                       +- CometIcebergNativeScan [customer_id#100L, region#103], s3://lakehouse/warehouse/bronze/customers/metadata/00001-c5c36fa0-2c63-4252-bdde-7b0fa6589ee9.metadata.json, IcebergScan(table=lakehouse.bronze.customers, schemaId=0, snapshotId=6149636589958574772, branch=null, filters=, runtimeFilters=, groupedBy=), 2
+                                    +- CometSort [order_id#106L, quantity#109, unit_price#110, discount#111], [order_id#106L ASC NULLS FIRST]
+                                       +- AQEShuffleRead coalesced
+                                          +- ShuffleQueryStage 1
+                                             +- CometExchange hashpartitioning(order_id#106L, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=737]
+                                                +- CometIcebergNativeScan [order_id#106L, quantity#109, unit_price#110, discount#111], s3://lakehouse/warehouse/bronze/order_items/metadata/00001-b6c1a84b-27c2-4ed9-99cd-a2bd9b83f5f1.metadata.json, IcebergScan(table=lakehouse.bronze.order_items, schemaId=0, snapshotId=3772749778805410248, branch=null, filters=, runtimeFilters=, groupedBy=), 2
++- == Initial Plan ==
+   CometTakeOrderedAndProjectExec(limit=5000, offset=0, orderBy=[revenue_date#116 ASC NULLS FIRST,region#103 ASC NULLS FIRST], output=[revenue_date#116,region#103,order_count#112L,gross_revenue#113,discount_amount#114,net_revenue#115])
+   +- CometHashAggregate [revenue_date#116, region#103, sum#136, isEmpty#137, sum#140, isEmpty#141, sum#144, isEmpty#145, count#148L], [Final], [revenue_date#116, region#103], [sum(gross_line_revenue#117), sum(discount_line_amount#118), sum(net_line_revenue#119), count(distinct order_id#95L)]
+      +- CometExchange hashpartitioning(revenue_date#116, region#103, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=744]
+         +- CometHashAggregate [revenue_date#116, region#103, order_id#95L, sum#136, isEmpty#137, sum#140, isEmpty#141, sum#144, isEmpty#145], [PartialMerge, Partial], [revenue_date#116, region#103], [merge_sum(gross_line_revenue#117), merge_sum(discount_line_amount#118), merge_sum(net_line_revenue#119), partial_count(distinct order_id#95L)]
+            +- CometHashAggregate [revenue_date#116, region#103, order_id#95L, sum#136, isEmpty#137, sum#140, isEmpty#141, sum#144, isEmpty#145], [PartialMerge], [revenue_date#116, region#103, order_id#95L], [merge_sum(gross_line_revenue#117), merge_sum(discount_line_amount#118), merge_sum(net_line_revenue#119)]
+               +- CometHashAggregate [revenue_date#116, region#103, order_id#95L, gross_line_revenue#117, discount_line_amount#118, net_line_revenue#119], [Partial], [revenue_date#116, region#103, order_id#95L], [partial_sum(gross_line_revenue#117), partial_sum(discount_line_amount#118), partial_sum(net_line_revenue#119)]
+                  +- CometProject [revenue_date#116, region#103, order_id#95L, gross_line_revenue#117, discount_line_amount#118, net_line_revenue#119], [cast(order_time#97 as date) AS revenue_date#116, region#103, order_id#95L, cast((cast(quantity#109 as decimal(10,0)) * unit_price#110) as decimal(20,4)) AS gross_line_revenue#117, cast(((cast(quantity#109 as decimal(10,0)) * unit_price#110) * discount#111) as decimal(20,4)) AS discount_line_amount#118, cast(((cast(quantity#109 as decimal(10,0)) * unit_price#110) * (1.0000 - discount#111)) as decimal(20,4)) AS net_line_revenue#119]
+                     +- CometSortMergeJoin [order_id#95L], [order_id#106L], Inner
+                        :- CometSort [order_id#95L, order_time#97, region#103], [order_id#95L ASC NULLS FIRST]
+                        :  +- CometExchange hashpartitioning(order_id#95L, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=733]
+                        :     +- CometProject [order_id#95L, order_time#97, region#103], [order_id#95L, order_time#97, region#103]
+                        :        +- CometBroadcastHashJoin [customer_id#96L], [customer_id#100L], Inner, BuildRight
+                        :           :- CometProject [order_id#95L, customer_id#96L, order_time#97], [order_id#95L, customer_id#96L, order_time#97]
+                        :           :  +- CometFilter [order_id#95L, customer_id#96L, order_time#97, status#98], (((status#98 = COMPLETED) AND (order_time#97 >= 2025-01-01 00:00:00)) AND (order_time#97 < 2026-01-01 00:00:00))
+                        :           :     +- CometIcebergNativeScan [order_id#95L, customer_id#96L, order_time#97, status#98], s3://lakehouse/warehouse/bronze/orders/metadata/00023-acc9261b-14ab-493b-bfdb-a02f951533ed.metadata.json, IcebergScan(table=lakehouse.bronze.orders, schemaId=1, snapshotId=2905106192513243873, branch=null, filters=status = 'COMPLETED', order_time >= 1735689600000000, order_time < 1767225600000000, runtimeFilters=, groupedBy=), 12
+                        :           +- CometBroadcastExchange [customer_id#100L, region#103]
+                        :              +- CometIcebergNativeScan [customer_id#100L, region#103], s3://lakehouse/warehouse/bronze/customers/metadata/00001-c5c36fa0-2c63-4252-bdde-7b0fa6589ee9.metadata.json, IcebergScan(table=lakehouse.bronze.customers, schemaId=0, snapshotId=6149636589958574772, branch=null, filters=, runtimeFilters=, groupedBy=), 2
+                        +- CometSort [order_id#106L, quantity#109, unit_price#110, discount#111], [order_id#106L ASC NULLS FIRST]
+                           +- CometExchange hashpartitioning(order_id#106L, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=737]
+                              +- CometIcebergNativeScan [order_id#106L, quantity#109, unit_price#110, discount#111], s3://lakehouse/warehouse/bronze/order_items/metadata/00001-b6c1a84b-27c2-4ed9-99cd-a2bd9b83f5f1.metadata.json, IcebergScan(table=lakehouse.bronze.order_items, schemaId=0, snapshotId=3772749778805410248, branch=null, filters=, runtimeFilters=, groupedBy=), 2

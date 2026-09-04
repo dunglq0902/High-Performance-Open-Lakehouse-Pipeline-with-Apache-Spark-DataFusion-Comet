@@ -42,46 +42,90 @@ TRANSITIONS = frozenset(
         "RowToColumnar",
         "CometColumnarToRow",
         "CometRowToColumnar",
+        "CometNativeColumnarToRow",
+        "CometSparkColumnarToColumnar",
+        "CometSparkRowToColumnar",
         "ArrowEvalPython",
         "BatchEvalPython",
     }
 )
 
-# Actual class/plan prefixes observed in Spark 4.1 plans. A node absent from this set is unknown,
-# not automatically a fallback. Prefix matching covers version-specific suffixes such as Exec.
-SPARK_OPERATOR_PREFIXES = (
-    "BatchScan",
-    "FileScan",
-    "Scan",
-    "Filter",
-    "Project",
-    "HashAggregate",
-    "SortAggregate",
-    "ObjectHashAggregate",
-    "BroadcastHashJoin",
-    "ShuffledHashJoin",
-    "SortMergeJoin",
-    "BroadcastNestedLoopJoin",
-    "CartesianProduct",
-    "Window",
-    "WindowGroupLimit",
-    "Sort",
-    "Exchange",
-    "ShuffleExchange",
-    "Union",
-    "Expand",
-    "Generate",
-    "Sample",
-    "TakeOrderedAndProject",
-    "GlobalLimit",
-    "LocalLimit",
-    "CollectLimit",
-    "Coalesce",
-    "InMemoryTableScan",
+# Reviewed Spark physical operator names. Normalize package names and the exact Exec suffix
+# before matching; an unreviewed lookalike must not silently become a fallback.
+SPARK_OPERATORS = frozenset(
+    {
+        "BatchScan",
+        "FileScan",
+        "Scan",
+        "Filter",
+        "Project",
+        "HashAggregate",
+        "SortAggregate",
+        "ObjectHashAggregate",
+        "BroadcastHashJoin",
+        "ShuffledHashJoin",
+        "SortMergeJoin",
+        "BroadcastNestedLoopJoin",
+        "CartesianProduct",
+        "Window",
+        "WindowGroupLimit",
+        "Sort",
+        "Exchange",
+        "ShuffleExchange",
+        "BroadcastExchange",
+        "Union",
+        "Expand",
+        "Generate",
+        "Sample",
+        "TakeOrderedAndProject",
+        "GlobalLimit",
+        "LocalLimit",
+        "CollectLimit",
+        "Coalesce",
+        "InMemoryTableScan",
+    }
 )
 
+# Concrete executable names reviewed against the checksum-locked Comet 1.0.0 jar/source
+# (3a7a2c437cc771621b6040a308657573dbc1b9c2), including its custom native-shuffle nodeName.
+# Keep planning placeholders and Python/subquery helpers unknown until their execution/category
+# is separately reviewed. A Comet prefix alone is not evidence of an executable native operator.
+COMET_OPERATORS = frozenset(
+    {
+        "CometBatchScan",
+        "CometBroadcastExchange",
+        "CometBroadcastHashJoin",
+        "CometBroadcastNestedLoopJoin",
+        "CometCoalesce",
+        "CometCollectLimit",
+        "CometCsvNativeScan",
+        "CometExchange",
+        "CometExpand",
+        "CometExplode",
+        "CometFilter",
+        "CometGlobalLimit",
+        "CometHashAggregate",
+        "CometHashJoin",
+        "CometIcebergNativeScan",
+        "CometLocalLimit",
+        "CometLocalTableScan",
+        "CometNativeScan",
+        "CometNativeWrite",
+        "CometProject",
+        "CometSample",
+        "CometSort",
+        "CometSortMergeJoin",
+        "CometTakeOrderedAndProject",
+        "CometUnion",
+        "CometWindow",
+    }
+)
+
+# Comet 1.0.0's CometColumnarShuffle calls prepareJVMShuffleDependency, unlike the native
+# CometExchange path. Keep it in the non-native/fallback denominator, never the native count.
+NON_NATIVE_COMET_OPERATORS = frozenset({"CometColumnarExchange"})
+
 IGNORED_LINE_PREFIXES = (
-    "==",
     "Output",
     "Arguments",
     "ReadSchema",
@@ -91,6 +135,16 @@ IGNORED_LINE_PREFIXES = (
     "DataFilters",
     "Batched",
 )
+
+
+def _is_ignored_line(line: str) -> bool:
+    if line.startswith("=="):
+        return True
+    return any(
+        line == prefix or re.match(r"[\s:]", line[len(prefix) :]) is not None
+        for prefix in IGNORED_LINE_PREFIXES
+        if line.startswith(prefix)
+    )
 
 
 @dataclass
@@ -117,7 +171,7 @@ def _base_node(node: str) -> str:
 
 def _is_spark_operator(node: str) -> bool:
     base = _base_node(node)
-    return any(base.startswith(prefix) for prefix in SPARK_OPERATOR_PREFIXES)
+    return base in SPARK_OPERATORS
 
 
 def _indent_width(prefix: str) -> int:
@@ -143,7 +197,7 @@ def canonical_plan_semantics(plan: str) -> str:
     lines: list[str] = []
     for raw_line in _aqe_final_section(plan).splitlines():
         line = raw_line.strip()
-        if not line or line.startswith(IGNORED_LINE_PREFIXES):
+        if not line or _is_ignored_line(line):
             continue
         match = TREE_PREFIX.match(raw_line)
         if match is None:
@@ -181,12 +235,34 @@ def analyze_plan(plan: str, *, comet_enabled: bool = True) -> dict[str, object]:
     seen_unknown: set[str] = set()
     seen_scans: set[str] = set()
 
+    # A captured pre-execution AQE tree cannot serve as final physical-plan evidence, even if
+    # every displayed operator is otherwise known. Only inspect the leading adaptive wrapper:
+    # a discarded Initial Plan section can legitimately contain unfinished inner stages.
+    for raw_line in plan.splitlines():
+        if not raw_line.strip() or _is_ignored_line(raw_line.strip()):
+            continue
+        match = TREE_PREFIX.match(raw_line)
+        if (
+            match is not None
+            and _base_node(match.group("node")) == "AdaptiveSparkPlan"
+            and not re.search(r"\bisFinalPlan=true\b", raw_line)
+        ):
+            result.status = "partial"
+        break
+
     for raw_line in _aqe_final_section(plan).splitlines():
         line = raw_line.strip()
-        if not line or line.startswith(IGNORED_LINE_PREFIXES):
+        if not line or _is_ignored_line(line):
             continue
         match = TREE_PREFIX.match(raw_line)
         if match is None:
+            # Splitting AQE sections can leave a bare tree connector. Other unparsed content
+            # must not disappear from evidence merely because it fails the token grammar.
+            if re.fullmatch(r"[\s|:+\\-]*", raw_line) is None:
+                result.status = "partial"
+                if line not in seen_unknown:
+                    result.unknown_nodes.append(line)
+                    seen_unknown.add(line)
             continue
         node = match.group("node")
         base = _base_node(node)
@@ -196,14 +272,16 @@ def analyze_plan(plan: str, *, comet_enabled: bool = True) -> dict[str, object]:
         parent_native = native_stack[-1][1] if native_stack else False
 
         if base in WRAPPERS:
+            if base == "AdaptiveSparkPlan" and not re.search(r"\bisFinalPlan=true\b", raw_line):
+                result.status = "partial"
             native_stack.append((indent, parent_native))
             continue
-        if base in TRANSITIONS or "ColumnarToRow" in base or "RowToColumnar" in base:
+        if base in TRANSITIONS:
             result.transition_count += 1
             native_stack.append((indent, False))
             continue
 
-        is_native = base.startswith("Comet")
+        is_native = base in COMET_OPERATORS
         if is_native:
             result.comet_native_operators += 1
             result.total_operators += 1
@@ -213,7 +291,7 @@ def analyze_plan(plan: str, *, comet_enabled: bool = True) -> dict[str, object]:
                 result.scan_implementations.append(base)
                 seen_scans.add(base)
             native_stack.append((indent, True))
-        elif _is_spark_operator(base):
+        elif _is_spark_operator(base) or base in NON_NATIVE_COMET_OPERATORS:
             result.total_operators += 1
             if comet_enabled:
                 result.spark_fallback_operators += 1
@@ -240,4 +318,6 @@ def analyze_plan(plan: str, *, comet_enabled: bool = True) -> dict[str, object]:
     result.native_coverage_ratio = (
         result.comet_native_operators / denominator if comet_enabled and denominator else None
     )
+    if result.total_operators == 0 and not result.unknown_nodes:
+        result.status = "unavailable"
     return result.to_dict()

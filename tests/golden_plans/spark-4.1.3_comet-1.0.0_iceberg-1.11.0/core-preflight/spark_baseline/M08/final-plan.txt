@@ -1,0 +1,27 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 1
+   +- TakeOrderedAndProject(limit=5000, orderBy=[session_id#57 ASC NULLS FIRST,event_rank#64 ASC NULLS FIRST,event_time#59 ASC NULLS FIRST,event_id#56L ASC NULLS FIRST], output=[session_id#57,event_id#56L,event_time#59,event_type#60,event_rank#64])
+      +- *(3) Filter (event_rank#64 <= 4)
+         +- Window [row_number() windowspecdefinition(session_id#57, event_time#59 ASC NULLS FIRST, event_id#56L ASC NULLS FIRST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS event_rank#64], [session_id#57], [event_time#59 ASC NULLS FIRST, event_id#56L ASC NULLS FIRST]
+            +- WindowGroupLimit [session_id#57], [event_time#59 ASC NULLS FIRST, event_id#56L ASC NULLS FIRST], row_number(), 4, Final
+               +- *(2) Sort [session_id#57 ASC NULLS FIRST, event_time#59 ASC NULLS FIRST, event_id#56L ASC NULLS FIRST], false, 0
+                  +- AQEShuffleRead coalesced
+                     +- ShuffleQueryStage 0
+                        +- Exchange hashpartitioning(session_id#57, 16), ENSURE_REQUIREMENTS, [plan_id=247]
+                           +- WindowGroupLimit [session_id#57], [event_time#59 ASC NULLS FIRST, event_id#56L ASC NULLS FIRST], row_number(), 4, Partial
+                              +- *(1) Sort [session_id#57 ASC NULLS FIRST, event_time#59 ASC NULLS FIRST, event_id#56L ASC NULLS FIRST], false, 0
+                                 +- *(1) Project [session_id#57, event_id#56L, event_time#59, event_type#60]
+                                    +- *(1) ColumnarToRow
+                                       +- BatchScan lakehouse.bronze.events[event_id#56L, session_id#57, event_time#59, event_type#60] IcebergScan(table=lakehouse.bronze.events, schemaId=0, snapshotId=592568026003381846, branch=null, filters=event_time >= 1735689600000000, event_time < 1767225600000000, runtimeFilters=, groupedBy=) RuntimeFilters: []
++- == Initial Plan ==
+   TakeOrderedAndProject(limit=5000, orderBy=[session_id#57 ASC NULLS FIRST,event_rank#64 ASC NULLS FIRST,event_time#59 ASC NULLS FIRST,event_id#56L ASC NULLS FIRST], output=[session_id#57,event_id#56L,event_time#59,event_type#60,event_rank#64])
+   +- Filter (event_rank#64 <= 4)
+      +- Window [row_number() windowspecdefinition(session_id#57, event_time#59 ASC NULLS FIRST, event_id#56L ASC NULLS FIRST, specifiedwindowframe(RowFrame, unboundedpreceding$(), currentrow$())) AS event_rank#64], [session_id#57], [event_time#59 ASC NULLS FIRST, event_id#56L ASC NULLS FIRST]
+         +- WindowGroupLimit [session_id#57], [event_time#59 ASC NULLS FIRST, event_id#56L ASC NULLS FIRST], row_number(), 4, Final
+            +- Sort [session_id#57 ASC NULLS FIRST, event_time#59 ASC NULLS FIRST, event_id#56L ASC NULLS FIRST], false, 0
+               +- Exchange hashpartitioning(session_id#57, 16), ENSURE_REQUIREMENTS, [plan_id=222]
+                  +- WindowGroupLimit [session_id#57], [event_time#59 ASC NULLS FIRST, event_id#56L ASC NULLS FIRST], row_number(), 4, Partial
+                     +- Sort [session_id#57 ASC NULLS FIRST, event_time#59 ASC NULLS FIRST, event_id#56L ASC NULLS FIRST], false, 0
+                        +- Project [session_id#57, event_id#56L, event_time#59, event_type#60]
+                           +- BatchScan lakehouse.bronze.events[event_id#56L, session_id#57, event_time#59, event_type#60] IcebergScan(table=lakehouse.bronze.events, schemaId=0, snapshotId=592568026003381846, branch=null, filters=event_time >= 1735689600000000, event_time < 1767225600000000, runtimeFilters=, groupedBy=) RuntimeFilters: []

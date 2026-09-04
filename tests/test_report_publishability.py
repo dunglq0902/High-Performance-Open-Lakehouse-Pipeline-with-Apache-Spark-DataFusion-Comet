@@ -699,7 +699,7 @@ def _record(
     input_hashes = cast(dict[str, str], manifest["input_hashes"])
     native = engine == "comet_accelerated"
     attempt_dir.mkdir(parents=True, exist_ok=True)
-    plan_text = "CometScan test_table\n" if native else "BatchScan test_table\n"
+    plan_text = "CometIcebergNativeScan test_table\n" if native else "BatchScan test_table\n"
     (attempt_dir / "initial-plan.txt").write_text(plan_text, encoding="utf-8")
     (attempt_dir / "final-plan.txt").write_text(plan_text, encoding="utf-8")
     plan_analysis = analyze_plan(plan_text, comet_enabled=native)

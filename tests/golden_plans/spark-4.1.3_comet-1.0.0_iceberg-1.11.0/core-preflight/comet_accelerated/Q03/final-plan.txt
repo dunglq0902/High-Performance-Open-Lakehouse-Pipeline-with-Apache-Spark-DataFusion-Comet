@@ -1,0 +1,50 @@
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   ResultQueryStage 4
+   +- *(1) CometColumnarToRow
+      +- CometTakeOrderedAndProjectExec(limit=10, offset=0, orderBy=[revenue#315 DESC NULLS LAST,o_orderdate#294 ASC NULLS FIRST,l_orderkey#299L ASC NULLS FIRST,o_shippriority#297 ASC NULLS FIRST], output=[l_orderkey#299L,revenue#315,o_orderdate#294,o_shippriority#297])
+         +- CometHashAggregate [l_orderkey#299L, o_orderdate#294, o_shippriority#297, sum#330, isEmpty#331], [Final], [l_orderkey#299L, o_orderdate#294, o_shippriority#297], [sum(revenue_line#316)]
+            +- CometHashAggregate [l_orderkey#299L, o_orderdate#294, o_shippriority#297, revenue_line#316], [Partial], [l_orderkey#299L, o_orderdate#294, o_shippriority#297], [partial_sum(revenue_line#316)]
+               +- CometProject [l_orderkey#299L, o_orderdate#294, o_shippriority#297, revenue_line#316], [l_orderkey#299L, o_orderdate#294, o_shippriority#297, cast((l_extendedprice#304 * (1.00 - l_discount#305)) as decimal(20,4)) AS revenue_line#316]
+                  +- CometBroadcastHashJoin [o_orderkey#290L], [l_orderkey#299L], Inner, BuildLeft
+                     :- BroadcastQueryStage 3
+                     :  +- CometBroadcastExchange [o_orderkey#290L, o_orderdate#294, o_shippriority#297]
+                     :     +- AQEShuffleRead local
+                     :        +- ShuffleQueryStage 2
+                     :           +- CometExchange hashpartitioning(o_orderkey#290L, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=1943]
+                     :              +- CometProject [o_orderkey#290L, o_orderdate#294, o_shippriority#297], [o_orderkey#290L, o_orderdate#294, o_shippriority#297]
+                     :                 +- CometBroadcastHashJoin [c_custkey#282L], [o_custkey#291L], Inner, BuildLeft
+                     :                    :- BroadcastQueryStage 0
+                     :                    :  +- CometBroadcastExchange [c_custkey#282L]
+                     :                    :     +- CometProject [c_custkey#282L], [c_custkey#282L]
+                     :                    :        +- CometFilter [c_custkey#282L, c_mktsegment#288], (c_mktsegment#288 = BUILDING)
+                     :                    :           +- CometIcebergNativeScan [c_custkey#282L, c_mktsegment#288], s3://lakehouse/warehouse/tpch/customer/metadata/00001-b8d2f7d0-8331-4f78-87f0-6a75440d9c95.metadata.json, IcebergScan(table=lakehouse.tpch.customer, schemaId=0, snapshotId=4853557306529383209, branch=null, filters=c_mktsegment = 'BUILDING', runtimeFilters=, groupedBy=), 2
+                     :                    +- CometFilter [o_orderkey#290L, o_custkey#291L, o_orderdate#294, o_shippriority#297], (o_orderdate#294 < 1995-03-15)
+                     :                       +- CometIcebergNativeScan [o_orderkey#290L, o_custkey#291L, o_orderdate#294, o_shippriority#297], s3://lakehouse/warehouse/tpch/orders/metadata/00001-d3a4c19c-bf81-4ac9-bb24-585e259f4e7b.metadata.json, IcebergScan(table=lakehouse.tpch.orders, schemaId=0, snapshotId=16669299233395393, branch=null, filters=o_orderdate < 9204, runtimeFilters=, groupedBy=), 2
+                     +- AQEShuffleRead coalesced
+                        +- ShuffleQueryStage 1
+                           +- CometExchange hashpartitioning(l_orderkey#299L, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=1651]
+                              +- CometProject [l_orderkey#299L, l_extendedprice#304, l_discount#305], [l_orderkey#299L, l_extendedprice#304, l_discount#305]
+                                 +- CometFilter [l_orderkey#299L, l_extendedprice#304, l_discount#305, l_shipdate#309], (l_shipdate#309 > 1995-03-15)
+                                    +- CometIcebergNativeScan [l_orderkey#299L, l_extendedprice#304, l_discount#305, l_shipdate#309], s3://lakehouse/warehouse/tpch/lineitem/metadata/00001-c2d38331-589b-4c29-8064-689a065dbefb.metadata.json, IcebergScan(table=lakehouse.tpch.lineitem, schemaId=0, snapshotId=5437091732438207599, branch=null, filters=l_shipdate > 9204, runtimeFilters=, groupedBy=), 2
++- == Initial Plan ==
+   CometTakeOrderedAndProjectExec(limit=10, offset=0, orderBy=[revenue#315 DESC NULLS LAST,o_orderdate#294 ASC NULLS FIRST,l_orderkey#299L ASC NULLS FIRST,o_shippriority#297 ASC NULLS FIRST], output=[l_orderkey#299L,revenue#315,o_orderdate#294,o_shippriority#297])
+   +- CometHashAggregate [l_orderkey#299L, o_orderdate#294, o_shippriority#297, sum#330, isEmpty#331], [Final], [l_orderkey#299L, o_orderdate#294, o_shippriority#297], [sum(revenue_line#316)]
+      +- CometHashAggregate [l_orderkey#299L, o_orderdate#294, o_shippriority#297, revenue_line#316], [Partial], [l_orderkey#299L, o_orderdate#294, o_shippriority#297], [partial_sum(revenue_line#316)]
+         +- CometProject [l_orderkey#299L, o_orderdate#294, o_shippriority#297, revenue_line#316], [l_orderkey#299L, o_orderdate#294, o_shippriority#297, cast((l_extendedprice#304 * (1.00 - l_discount#305)) as decimal(20,4)) AS revenue_line#316]
+            +- CometSortMergeJoin [o_orderkey#290L], [l_orderkey#299L], Inner
+               :- CometSort [o_orderkey#290L, o_orderdate#294, o_shippriority#297], [o_orderkey#290L ASC NULLS FIRST]
+               :  +- CometExchange hashpartitioning(o_orderkey#290L, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=1647]
+               :     +- CometProject [o_orderkey#290L, o_orderdate#294, o_shippriority#297], [o_orderkey#290L, o_orderdate#294, o_shippriority#297]
+               :        +- CometBroadcastHashJoin [c_custkey#282L], [o_custkey#291L], Inner, BuildLeft
+               :           :- CometBroadcastExchange [c_custkey#282L]
+               :           :  +- CometProject [c_custkey#282L], [c_custkey#282L]
+               :           :     +- CometFilter [c_custkey#282L, c_mktsegment#288], (c_mktsegment#288 = BUILDING)
+               :           :        +- CometIcebergNativeScan [c_custkey#282L, c_mktsegment#288], s3://lakehouse/warehouse/tpch/customer/metadata/00001-b8d2f7d0-8331-4f78-87f0-6a75440d9c95.metadata.json, IcebergScan(table=lakehouse.tpch.customer, schemaId=0, snapshotId=4853557306529383209, branch=null, filters=c_mktsegment = 'BUILDING', runtimeFilters=, groupedBy=), 2
+               :           +- CometFilter [o_orderkey#290L, o_custkey#291L, o_orderdate#294, o_shippriority#297], (o_orderdate#294 < 1995-03-15)
+               :              +- CometIcebergNativeScan [o_orderkey#290L, o_custkey#291L, o_orderdate#294, o_shippriority#297], s3://lakehouse/warehouse/tpch/orders/metadata/00001-d3a4c19c-bf81-4ac9-bb24-585e259f4e7b.metadata.json, IcebergScan(table=lakehouse.tpch.orders, schemaId=0, snapshotId=16669299233395393, branch=null, filters=o_orderdate < 9204, runtimeFilters=, groupedBy=), 2
+               +- CometSort [l_orderkey#299L, l_extendedprice#304, l_discount#305], [l_orderkey#299L ASC NULLS FIRST]
+                  +- CometExchange hashpartitioning(l_orderkey#299L, 16), ENSURE_REQUIREMENTS, CometNativeShuffle, [plan_id=1651]
+                     +- CometProject [l_orderkey#299L, l_extendedprice#304, l_discount#305], [l_orderkey#299L, l_extendedprice#304, l_discount#305]
+                        +- CometFilter [l_orderkey#299L, l_extendedprice#304, l_discount#305, l_shipdate#309], (l_shipdate#309 > 1995-03-15)
+                           +- CometIcebergNativeScan [l_orderkey#299L, l_extendedprice#304, l_discount#305, l_shipdate#309], s3://lakehouse/warehouse/tpch/lineitem/metadata/00001-c2d38331-589b-4c29-8064-689a065dbefb.metadata.json, IcebergScan(table=lakehouse.tpch.lineitem, schemaId=0, snapshotId=5437091732438207599, branch=null, filters=l_shipdate > 9204, runtimeFilters=, groupedBy=), 2
