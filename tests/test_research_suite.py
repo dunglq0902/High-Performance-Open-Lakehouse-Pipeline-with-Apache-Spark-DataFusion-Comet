@@ -144,7 +144,7 @@ def test_suite_image_uses_latest_contiguous_capacity_attempt(tmp_path: Path) -> 
 
 
 def _prepared_campaigns(tmp_path: Path) -> tuple[PreparedCampaign, ...]:
-    return tuple(
+    prepared = tuple(
         PreparedCampaign(
             config=config,
             plan_path=tmp_path / str(index) / "experiment-manifest.json",
@@ -152,6 +152,10 @@ def _prepared_campaigns(tmp_path: Path) -> tuple[PreparedCampaign, ...]:
         )
         for index, config in enumerate(ECOMMERCE_CORE_CONFIGS[:3])
     )
+    for index, item in enumerate(prepared):
+        item.plan_path.parent.mkdir(parents=True)
+        item.plan_path.write_text(json.dumps({"experiment_id": f"EXP-{index}"}), encoding="utf-8")
+    return prepared
 
 
 def test_suite_builds_once_and_carries_admitted_image(
@@ -162,6 +166,8 @@ def test_suite_builds_once_and_carries_admitted_image(
     for item in prepared:
         _capacity_gate(item.plan_path, image_id)
     monkeypatch.setattr(suite_module, "prepare_suite", lambda _configs: prepared)
+    monkeypatch.setattr(suite_module, "clean_git_commit", lambda _root: _COMMIT)
+    monkeypatch.setattr(suite_module, "_resume_image", lambda *_args, **_kwargs: None)
     commands: list[list[str]] = []
     monkeypatch.setattr(
         suite_module.subprocess, "run", lambda command, **_kwargs: commands.append(command)
@@ -183,6 +189,8 @@ def test_suite_stops_on_image_drift_and_preserves_cleanup(
     for index, item in enumerate(prepared):
         _capacity_gate(item.plan_path, "sha256:" + ("b" if index == 0 else "c") * 64)
     monkeypatch.setattr(suite_module, "prepare_suite", lambda _configs: prepared)
+    monkeypatch.setattr(suite_module, "clean_git_commit", lambda _root: _COMMIT)
+    monkeypatch.setattr(suite_module, "_resume_image", lambda *_args, **_kwargs: None)
     commands: list[list[str]] = []
     monkeypatch.setattr(
         suite_module.subprocess, "run", lambda command, **_kwargs: commands.append(command)
@@ -200,6 +208,8 @@ def test_suite_stops_before_next_campaign_after_failure(
 ) -> None:
     prepared = _prepared_campaigns(tmp_path)
     monkeypatch.setattr(suite_module, "prepare_suite", lambda _configs: prepared)
+    monkeypatch.setattr(suite_module, "clean_git_commit", lambda _root: _COMMIT)
+    monkeypatch.setattr(suite_module, "_resume_image", lambda *_args, **_kwargs: None)
     commands: list[list[str]] = []
 
     def run(command: list[str], **_kwargs: object) -> None:
@@ -212,6 +222,83 @@ def test_suite_stops_before_next_campaign_after_failure(
         run_suite(ECOMMERCE_CORE_CONFIGS[:3], keep_services=False)
     assert len(commands) == 2
     assert commands[-1] == ["docker", "compose", "down"]
+
+
+def test_partial_suite_uses_verified_local_image_for_first_invocation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prepared = _prepared_campaigns(tmp_path)
+    image_id = "sha256:" + "b" * 64
+    for item in prepared:
+        _capacity_gate(item.plan_path, image_id)
+    monkeypatch.setattr(suite_module, "prepare_suite", lambda _configs: prepared)
+    monkeypatch.setattr(suite_module, "clean_git_commit", lambda _root: _COMMIT)
+    monkeypatch.setattr(
+        suite_module,
+        "_resume_image",
+        lambda *_args, **_kwargs: image_id,
+    )
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        suite_module.subprocess, "run", lambda command, **_kwargs: commands.append(command)
+    )
+
+    run_suite(ECOMMERCE_CORE_CONFIGS[:3], keep_services=True)
+
+    assert len(commands) == 3
+    assert all(
+        command[-3:] == ["--no-build", "--expected-spark-image", image_id] for command in commands
+    )
+
+
+def test_resume_image_requires_completed_evidence_and_local_exact_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prepared = _prepared_campaigns(tmp_path)
+    raw_root = tmp_path / "raw"
+    image_id = "sha256:" + "b" * 64
+    (prepared[0].plan_path.parent / "started").write_text("started", encoding="utf-8")
+    (prepared[1].plan_path.parent / "started").write_text("started", encoding="utf-8")
+    monkeypatch.setattr(
+        suite_module,
+        "_completed_campaign_image",
+        lambda item, **_kwargs: image_id if item == prepared[0] else None,
+    )
+    validated: list[PreparedCampaign] = []
+    monkeypatch.setattr(
+        suite_module,
+        "_validate_started_campaign",
+        lambda item, **_kwargs: validated.append(item),
+    )
+    monkeypatch.setattr(suite_module, "_local_image_available", lambda _image: True)
+
+    assert suite_module._resume_image(prepared, commit=_COMMIT, raw_root=raw_root) == image_id
+    assert validated == list(prepared[:2])
+
+    monkeypatch.setattr(suite_module, "_local_image_available", lambda _image: False)
+    with pytest.raises(ValueError, match="not available locally"):
+        suite_module._resume_image(prepared, commit=_COMMIT, raw_root=raw_root)
+
+    monkeypatch.setattr(
+        suite_module,
+        "_completed_campaign_image",
+        lambda _item, **_kwargs: None,
+    )
+    with pytest.raises(ValueError, match="no verified completed campaign"):
+        suite_module._resume_image(prepared, commit=_COMMIT, raw_root=raw_root)
+
+
+def test_fresh_suite_state_does_not_require_an_existing_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prepared = _prepared_campaigns(tmp_path)
+    monkeypatch.setattr(
+        suite_module,
+        "_local_image_available",
+        lambda _image: pytest.fail("fresh suite must not inspect a prior image"),
+    )
+
+    assert suite_module._resume_image(prepared, commit=_COMMIT, raw_root=tmp_path / "raw") is None
 
 
 def _dataset_manifest(tmp_path: Path) -> Path:

@@ -14,8 +14,13 @@ publishable.
 - Docker Compose topology for MinIO, REST Iceberg catalog, one Spark master, one 2-core/5-GiB
   worker, and a bounded client container. Each Medallion and benchmark driver is pinned through an
   immutable per-attempt Compose override to the admitted worker image ID, with pulling disabled.
-  Master/worker image equality is checked before admission. The suite builds for its first campaign
-  only, then requires that same admitted image for every remaining campaign without rebuilding.
+  Master/worker image equality is checked before admission. A fresh suite builds for its first
+  campaign only, then requires that same admitted image for every remaining campaign without
+  rebuilding. After a process or WSL interruption, the suite first verifies a completed campaign,
+  its manifest and raw-record digest, current-commit provenance, and capacity admission; it resumes
+  the very first campaign with `--no-build` only when that exact image ID still exists locally.
+  Missing images, incomplete evidence without a verified completed prefix, and non-contiguous suite
+  state stop before any rebuild can replace the admitted image.
 - Deterministic E-commerce generation with revisioned dataset IDs, immutable manifests, exact
   CPython version/implementation provenance, physical and logical content hashes, PK/FK/date/funnel
   checks, and a benchmark-eligible `small` profile.
@@ -152,9 +157,14 @@ this is an operator-count ratio, not a timing or speedup claim.
 
 The shuffle distinction follows the locked Comet source's
 [native versus JVM shuffle branches](https://github.com/apache/datafusion-comet/blob/3a7a2c437cc771621b6040a308657573dbc1b9c2/spark/src/main/scala/org/apache/spark/sql/comet/execution/shuffle/CometShuffleExchangeExec.scala).
-Earlier M02 measurements and the M04 parser rejection are preserved as historical evidence. A
-committed parser correction requires fresh current-commit campaigns; neither an old failure nor
-an old successful raw record is rewritten or relabeled to satisfy publication.
+Earlier M02 measurements and the M04 parser rejection are preserved as historical evidence. The
+later `c33e1f0` campaign completed M02, M04, and M05 before its admitted Docker image became
+unavailable after an interruption; its 76 raw records, three passed campaign verifications, and
+one formally closed M08 `InterruptedAttempt` are byte-verified under
+`.artifacts/campaign-archives/c33e1f0ff938a9e5beabc5ebbf20da0f492f0852/lost-pinned-image-20260905/`.
+That campaign exposed and motivated the cross-process no-rebuild resume gate above. A committed
+control-plane correction requires fresh current-commit campaigns; neither an old failure nor an old
+successful raw record is rewritten or relabeled to satisfy publication.
 
 ## Shortest reviewed campaign workflow
 
