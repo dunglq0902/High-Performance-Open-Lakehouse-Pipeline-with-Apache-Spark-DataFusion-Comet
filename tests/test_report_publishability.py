@@ -6,10 +6,10 @@ import json
 import os
 import platform
 import shutil
-from collections.abc import Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, cast
 from uuid import uuid4
 
 import pyarrow as pa  # type: ignore[import-untyped]
@@ -76,6 +76,18 @@ _ARTIFACT_NAMES = {
     "stdout": "stdout.log",
     "stderr": "stderr.log",
 }
+_DEEP_EVIDENCE_TESTS = frozenset(
+    {
+        "test_control_artifact_tampering_blocks_publication",
+        "test_rehashed_physical_plan_tampering_blocks_publication",
+        "test_rehashed_event_metric_tampering_blocks_publication",
+        "test_rehashed_resource_summary_tampering_blocks_publication",
+        "test_rehashed_application_result_tampering_blocks_publication",
+        "test_rehashed_attempt_admission_tampering_blocks_publication",
+        "test_dataset_attestation_tampering_blocks_publication",
+        "test_visible_transient_retry_evidence_remains_publishable",
+    }
+)
 
 
 @dataclass(slots=True)
@@ -987,6 +999,7 @@ def _shared_evidence_tree() -> Iterator[_SharedEvidence]:
 def _stable_current_repository(
     monkeypatch: pytest.MonkeyPatch,
     _shared_evidence_tree: _SharedEvidence,
+    request: pytest.FixtureRequest,
 ) -> Iterator[None]:
     global _TEST_EVIDENCE_ROOT
     global _TEST_STATE
@@ -1016,10 +1029,96 @@ def _stable_current_repository(
     # Full content rehashing is covered by test_dataset_attestation.py. These policy tests keep
     # the complete attestation payload/path contract but avoid re-reading hundreds of MB per case.
     monkeypatch.setattr(publishability, "verify_attestation", lambda *_args, **_kwargs: None)
+
+    original_artifact_evidence = publishability.artifact_evidence
+    original_control_check = publishability._control_artifact_check
+    first_experiment_id = core_experiments()[0].experiment_id
+    test_name = getattr(request.node, "originalname", request.node.name)
+    deep_first_experiment = test_name in _DEEP_EVIDENCE_TESTS
+
+    def routed_artifact_evidence(
+        records: Iterable[Mapping[str, Any]],
+        repository_root: Path,
+        *,
+        require_succeeded: bool = True,
+    ) -> dict[str, int | str]:
+        selected = list(records)
+        experiment_ids = {str(record.get("experiment_id")) for record in selected}
+        if deep_first_experiment and experiment_ids == {first_experiment_id}:
+            return original_artifact_evidence(
+                selected,
+                repository_root,
+                require_succeeded=require_succeeded,
+            )
+        return _synthetic_artifact_evidence(selected)
+
+    def routed_control_check(
+        report: Mapping[str, Any],
+        experiment: publishability.CoreExperiment,
+        records: list[Mapping[str, Any]],
+        repository_root: Path,
+        cache: dict[str, tuple[dict[str, object] | None, tuple[str, ...]]],
+    ) -> tuple[dict[str, object] | None, list[str]]:
+        if deep_first_experiment and experiment.experiment_id == first_experiment_id:
+            return original_control_check(
+                report,
+                experiment,
+                records,
+                repository_root,
+                cache,
+            )
+        declared = report.get("control_artifacts")
+        if not isinstance(declared, Mapping):
+            return None, ["report.control_artifacts must be an object"]
+        return dict(declared), []
+
+    monkeypatch.setattr(publishability, "artifact_evidence", routed_artifact_evidence)
+    monkeypatch.setattr(publishability, "_control_artifact_check", routed_control_check)
+    yield
+
+
+@pytest.fixture
+def preserve_evidence_paths(
+    _shared_evidence_tree: _SharedEvidence,
+) -> Iterator[Callable[[Path], None]]:
+    root = _shared_evidence_tree.root.resolve()
+    saved: dict[Path, tuple[Literal["absent", "file"], bytes | None, int | None]] = {}
+
+    def preserve(path: Path) -> None:
+        resolved = path.resolve(strict=False)
+        try:
+            resolved.relative_to(root)
+        except ValueError as error:
+            raise AssertionError(f"test mutation escapes evidence fixture: {path}") from error
+        if resolved in saved:
+            return
+        if path.is_symlink():
+            raise AssertionError(f"test evidence path is a symbolic link: {path}")
+        if path.is_file():
+            saved[resolved] = ("file", path.read_bytes(), path.stat().st_mtime_ns)
+        elif path.exists():
+            raise AssertionError(f"existing directory snapshots are not supported: {path}")
+        else:
+            saved[resolved] = ("absent", None, None)
+
     try:
-        yield
+        yield preserve
     finally:
-        _restore_tree(evidence_root, shared.snapshot)
+        for path, (kind, payload, mtime_ns) in reversed(saved.items()):
+            if kind == "absent":
+                if path.is_symlink() or path.is_file():
+                    path.unlink()
+                elif path.is_dir():
+                    shutil.rmtree(path)
+                continue
+            if path.is_symlink() or path.is_file():
+                path.unlink()
+            elif path.is_dir():
+                shutil.rmtree(path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            assert payload is not None and mtime_ns is not None
+            path.write_bytes(payload)
+            os.utime(path, ns=(mtime_ns, mtime_ns))
 
 
 def _measurement_records() -> list[dict[str, object]]:
@@ -1030,10 +1129,45 @@ def _experiment_manifest(experiment: publishability.CoreExperiment) -> dict[str,
     return copy.deepcopy(_fixture_state().manifests[experiment.experiment_id])
 
 
+def _synthetic_artifact_evidence(
+    records: list[Mapping[str, Any]],
+) -> dict[str, int | str]:
+    declarations = [
+        {
+            "run_id": record.get("run_id"),
+            "status": record.get("status"),
+            "artifacts": record.get("artifacts"),
+        }
+        for record in sorted(records, key=lambda item: str(item.get("run_id")))
+    ]
+    return {
+        "file_count": len(declarations) * len(_ARTIFACT_NAMES),
+        "sha256": sha256_value(declarations),
+    }
+
+
+def _synthetic_control_evidence(experiment_id: str) -> dict[str, object]:
+    targets = [
+        {
+            "label": label,
+            "path": _repo_relative(path),
+            "kind": "directory" if path.is_dir() else "file",
+        }
+        for label, path in sorted(_control_targets(experiment_id).items())
+    ]
+    return {
+        "file_count": len(targets),
+        "sha256": sha256_value({"experiment_id": experiment_id, "targets": targets}),
+        "targets": targets,
+    }
+
+
 def _verification_value(
     experiment_id: str,
     records: list[dict[str, object]] | None = None,
     manifest: dict[str, object] | None = None,
+    *,
+    physical_evidence: bool = False,
 ) -> dict[str, object]:
     source = _measurement_records() if records is None else records
     if manifest is None:
@@ -1047,9 +1181,13 @@ def _verification_value(
         (record for record in source if record["experiment_id"] == experiment_id),
         key=lambda record: str(record["run_id"]),
     )
-    artifacts = artifact_evidence(selected, ROOT)
     control_targets = _control_targets(experiment_id)
-    controls = control_artifact_evidence(control_targets, ROOT)
+    if physical_evidence:
+        artifacts = artifact_evidence(selected, ROOT)
+        controls = control_artifact_evidence(control_targets, ROOT)
+    else:
+        artifacts = _synthetic_artifact_evidence(selected)
+        controls = _synthetic_control_evidence(experiment_id)
     execution_attempt_count = sum(
         1
         for run_dir in control_targets["run-attempts"].iterdir()
@@ -1086,6 +1224,8 @@ def _verification_value(
 def _write_verifications(
     campaign_root: Path,
     records: list[dict[str, object]] | None = None,
+    *,
+    physical_experiments: frozenset[str] = frozenset(),
 ) -> None:
     source = _measurement_records() if records is None else records
     for experiment in core_experiments():
@@ -1093,7 +1233,12 @@ def _write_verifications(
         directory.mkdir(parents=True)
         manifest = _experiment_manifest(experiment)
         (directory / "experiment-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        value = _verification_value(experiment.experiment_id, source, manifest)
+        value = _verification_value(
+            experiment.experiment_id,
+            source,
+            manifest,
+            physical_evidence=experiment.experiment_id in physical_experiments,
+        )
         (directory / "campaign-verification.json").write_text(json.dumps(value), encoding="utf-8")
 
 
@@ -1148,6 +1293,12 @@ def test_exact_core_suite_is_publishable(tmp_path: Path) -> None:
     assert all(check["passed"] for check in evidence["checks"]["measurements"])
     assert all(check["passed"] for check in evidence["checks"]["campaign_records"])
     assert all(check["passed"] for check in evidence["checks"]["campaign_verifications"])
+    assert all(
+        check["execution_attempt_count"] == EXPECTED_CAMPAIGN_RUNS
+        and check["failed_attempt_record_count"] == 0
+        and check["attempt_counts_verified"] is True
+        for check in evidence["checks"]["campaign_verifications"]
+    )
 
 
 def test_core_catalog_rejects_any_count_other_than_ten(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1496,12 +1647,20 @@ def test_dirty_repository_blocks_publication(
     assert "repository worktree is not clean" in check["issues"]
 
 
-def test_control_artifact_tampering_blocks_publication(tmp_path: Path) -> None:
+def test_control_artifact_tampering_blocks_publication(
+    tmp_path: Path,
+    preserve_evidence_paths: Callable[[Path], None],
+) -> None:
     campaign_root = tmp_path / "campaigns"
     records = _measurement_records()
-    _write_verifications(campaign_root, records)
     first = core_experiments()[0]
+    _write_verifications(
+        campaign_root,
+        records,
+        physical_experiments=frozenset({first.experiment_id}),
+    )
     medallion = _fixture_state().medallions[first.experiment_id]
+    preserve_evidence_paths(medallion)
     medallion.write_text('{"status":"failed"}', encoding="utf-8")
 
     evidence = assess_report_publishability(records, campaign_root)
@@ -1510,13 +1669,22 @@ def test_control_artifact_tampering_blocks_publication(tmp_path: Path) -> None:
     assert any("control artifacts" in issue or "Medallion" in issue for issue in evidence["issues"])
 
 
-def test_rehashed_physical_plan_tampering_blocks_publication(tmp_path: Path) -> None:
+def test_rehashed_physical_plan_tampering_blocks_publication(
+    tmp_path: Path,
+    preserve_evidence_paths: Callable[[Path], None],
+) -> None:
     campaign_root = tmp_path / "campaigns"
     records = _measurement_records()
     record = records[0]
     artifacts = cast(dict[str, str], record["artifacts"])
-    (ROOT / artifacts["physical_plan"]).write_text("Filter forged_predicate\n", encoding="utf-8")
-    _write_verifications(campaign_root, records)
+    plan_path = ROOT / artifacts["physical_plan"]
+    preserve_evidence_paths(plan_path)
+    plan_path.write_text("Filter forged_predicate\n", encoding="utf-8")
+    _write_verifications(
+        campaign_root,
+        records,
+        physical_experiments=frozenset({str(record["experiment_id"])}),
+    )
 
     evidence = assess_report_publishability(records, campaign_root)
 
@@ -1526,12 +1694,16 @@ def test_rehashed_physical_plan_tampering_blocks_publication(tmp_path: Path) -> 
     )
 
 
-def test_rehashed_event_metric_tampering_blocks_publication(tmp_path: Path) -> None:
+def test_rehashed_event_metric_tampering_blocks_publication(
+    tmp_path: Path,
+    preserve_evidence_paths: Callable[[Path], None],
+) -> None:
     campaign_root = tmp_path / "campaigns"
     records = _measurement_records()
     record = records[0]
     artifacts = cast(dict[str, str], record["artifacts"])
     event_path = ROOT / artifacts["event_log"]
+    preserve_evidence_paths(event_path)
     events = [json.loads(line) for line in event_path.read_text(encoding="utf-8").splitlines()]
     task = next(event for event in events if event["Event"] == "SparkListenerTaskEnd")
     task["Task Metrics"]["Executor CPU Time"] = 9_000_000_000
@@ -1539,7 +1711,11 @@ def test_rehashed_event_metric_tampering_blocks_publication(tmp_path: Path) -> N
         "".join(json.dumps(event, separators=(",", ":")) + "\n" for event in events),
         encoding="utf-8",
     )
-    _write_verifications(campaign_root, records)
+    _write_verifications(
+        campaign_root,
+        records,
+        physical_experiments=frozenset({str(record["experiment_id"])}),
+    )
 
     evidence = assess_report_publishability(records, campaign_root)
 
@@ -1550,16 +1726,24 @@ def test_rehashed_event_metric_tampering_blocks_publication(tmp_path: Path) -> N
     )
 
 
-def test_rehashed_resource_summary_tampering_blocks_publication(tmp_path: Path) -> None:
+def test_rehashed_resource_summary_tampering_blocks_publication(
+    tmp_path: Path,
+    preserve_evidence_paths: Callable[[Path], None],
+) -> None:
     campaign_root = tmp_path / "campaigns"
     records = _measurement_records()
     record = records[0]
     artifacts = cast(dict[str, str], record["artifacts"])
     resource_path = ROOT / artifacts["resource_samples"]
+    preserve_evidence_paths(resource_path)
     resource = json.loads(resource_path.read_text(encoding="utf-8"))
     resource["summary"]["cpu_peak_percent_of_limit"] = 99.0
     _write_json(resource_path, resource)
-    _write_verifications(campaign_root, records)
+    _write_verifications(
+        campaign_root,
+        records,
+        physical_experiments=frozenset({str(record["experiment_id"])}),
+    )
 
     evidence = assess_report_publishability(records, campaign_root)
 
@@ -1569,16 +1753,24 @@ def test_rehashed_resource_summary_tampering_blocks_publication(tmp_path: Path) 
     )
 
 
-def test_rehashed_application_result_tampering_blocks_publication(tmp_path: Path) -> None:
+def test_rehashed_application_result_tampering_blocks_publication(
+    tmp_path: Path,
+    preserve_evidence_paths: Callable[[Path], None],
+) -> None:
     campaign_root = tmp_path / "campaigns"
     records = _measurement_records()
     record = records[0]
     artifacts = cast(dict[str, str], record["artifacts"])
     application_path = (ROOT / artifacts["physical_plan"]).parent / "application-result.json"
+    preserve_evidence_paths(application_path)
     application = json.loads(application_path.read_text(encoding="utf-8"))
     application["row_count"] = 2
     _write_json(application_path, application)
-    _write_verifications(campaign_root, records)
+    _write_verifications(
+        campaign_root,
+        records,
+        physical_experiments=frozenset({str(record["experiment_id"])}),
+    )
 
     evidence = assess_report_publishability(records, campaign_root)
 
@@ -1589,17 +1781,25 @@ def test_rehashed_application_result_tampering_blocks_publication(tmp_path: Path
     )
 
 
-def test_rehashed_attempt_admission_tampering_blocks_publication(tmp_path: Path) -> None:
+def test_rehashed_attempt_admission_tampering_blocks_publication(
+    tmp_path: Path,
+    preserve_evidence_paths: Callable[[Path], None],
+) -> None:
     campaign_root = tmp_path / "campaigns"
     records = _measurement_records()
     record = records[0]
     artifacts = cast(dict[str, str], record["artifacts"])
     admission_path = (ROOT / artifacts["physical_plan"]).parent / "attempt-admission.json"
+    preserve_evidence_paths(admission_path)
     admission = json.loads(admission_path.read_text(encoding="utf-8"))
     admission["run"]["timeout_seconds"] += 1
     admission.pop("artifact_sha256")
     _write_json(admission_path, _self_hashed(admission))
-    _write_verifications(campaign_root, records)
+    _write_verifications(
+        campaign_root,
+        records,
+        physical_experiments=frozenset({str(record["experiment_id"])}),
+    )
 
     evidence = assess_report_publishability(records, campaign_root)
 
@@ -1607,12 +1807,20 @@ def test_rehashed_attempt_admission_tampering_blocks_publication(tmp_path: Path)
     assert any("admission run identity differs" in issue for issue in evidence["issues"])
 
 
-def test_dataset_attestation_tampering_blocks_publication(tmp_path: Path) -> None:
+def test_dataset_attestation_tampering_blocks_publication(
+    tmp_path: Path,
+    preserve_evidence_paths: Callable[[Path], None],
+) -> None:
     campaign_root = tmp_path / "campaigns"
     records = _measurement_records()
-    _write_verifications(campaign_root, records)
     first = core_experiments()[0]
+    _write_verifications(
+        campaign_root,
+        records,
+        physical_experiments=frozenset({first.experiment_id}),
+    )
     attestation = _control_targets(first.experiment_id)["dataset-validation-attestation"]
+    preserve_evidence_paths(attestation)
     payload = json.loads(attestation.read_text(encoding="utf-8"))
     payload["dataset"]["content_identity_sha256"] = "0" * 64
     attestation.write_text(json.dumps(payload), encoding="utf-8")
@@ -1623,7 +1831,10 @@ def test_dataset_attestation_tampering_blocks_publication(tmp_path: Path) -> Non
     assert any("attestation" in issue for issue in evidence["issues"])
 
 
-def test_visible_transient_retry_evidence_remains_publishable(tmp_path: Path) -> None:
+def test_visible_transient_retry_evidence_remains_publishable(
+    tmp_path: Path,
+    preserve_evidence_paths: Callable[[Path], None],
+) -> None:
     campaign_root = tmp_path / "campaigns"
     records = _measurement_records()
     first = core_experiments()[0]
@@ -1641,6 +1852,7 @@ def test_visible_transient_retry_evidence_remains_publishable(tmp_path: Path) ->
     controls = _control_targets(first.experiment_id)
     run_attempts = controls["run-attempts"]
     retry_dir = run_attempts / str(success["run_id"]) / "attempt-0002"
+    preserve_evidence_paths(retry_dir)
     shutil.copytree(retry_dir.parent / "attempt-0001", retry_dir)
     admission_path = retry_dir / "attempt-admission.json"
     admission = json.loads(admission_path.read_text(encoding="utf-8"))
@@ -1656,9 +1868,22 @@ def test_visible_transient_retry_evidence_remains_publishable(tmp_path: Path) ->
         / str(success["engine"])
         / f"{success['run_id']}-attempt-0001.json"
     )
+    preserve_evidence_paths(failed_attempt)
     _write_json(failed_attempt, failed)
-    _write_verifications(campaign_root, records)
+    _write_verifications(
+        campaign_root,
+        records,
+        physical_experiments=frozenset({first.experiment_id}),
+    )
 
     evidence = assess_report_publishability(records, campaign_root)
 
     assert evidence["publishable"] is True
+    check = next(
+        item
+        for item in evidence["checks"]["campaign_verifications"]
+        if item["experiment_id"] == first.experiment_id
+    )
+    assert check["execution_attempt_count"] == EXPECTED_CAMPAIGN_RUNS + 1
+    assert check["failed_attempt_record_count"] == 1
+    assert check["attempt_counts_verified"] is True

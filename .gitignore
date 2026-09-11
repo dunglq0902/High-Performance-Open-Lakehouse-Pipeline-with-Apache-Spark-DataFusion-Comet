@@ -24,6 +24,18 @@ analysis/plots/*
 !analysis/plots/.gitkeep
 spark-events/*
 
+# Generated presentation binaries are rebuilt from the admitted report evidence.
+deliverables/presentation/*.pptx
+deliverables/presentation/*.manifest.json
+
+# Recorded demo media and its evidence-bound sidecar are generated after final campaigns.
+deliverables/video/*.mp4
+deliverables/video/*.manifest.json
+
+# Final ZIP64 release and its outer checksum are generated from publishable evidence.
+deliverables/release/*.zip
+deliverables/release/*.zip.sha256
+
 # Local runtime state.
 .runtime/
 .artifacts/

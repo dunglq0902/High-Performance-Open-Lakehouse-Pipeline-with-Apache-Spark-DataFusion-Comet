@@ -151,6 +151,31 @@ services:
       spark-worker:
         condition: service_healthy
 
+  spark-history:
+    <<: *spark-common
+    profiles: [demo]
+    cpus: "1.0"
+    mem_limit: 2g
+    entrypoint: ["/opt/spark/bin/spark-class"]
+    command: ["org.apache.spark.deploy.history.HistoryServer"]
+    environment:
+      SPARK_HISTORY_OPTS: >-
+        -Dspark.history.fs.logDirectory=${SPARK_HISTORY_EVENT_LOG_DIR:-file:///opt/lakehouse/.artifacts/demo/spark-ui/not-prepared}
+        -Dspark.history.ui.port=18080
+        -Dspark.history.fs.update.interval=2s
+        -Dspark.history.fs.cleaner.enabled=false
+    volumes:
+      - ./.artifacts:/opt/lakehouse/.artifacts:ro
+    ports:
+      - "127.0.0.1:18080:18080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:18080 >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: "no"
+
 networks:
   lakehouse:
     driver: bridge

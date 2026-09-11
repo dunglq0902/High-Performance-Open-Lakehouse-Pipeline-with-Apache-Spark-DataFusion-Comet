@@ -1,4 +1,4 @@
-# Implementation status — 2026-09-05
+# Implementation status — 2026-09-08
 
 The research software and both primary datasets are implemented and materialized. The primary
 E-commerce dataset is revision v3, generated from a reviewed clean generator commit.
@@ -86,6 +86,32 @@ publishable.
   collectors/plan analysis, no resource-metric exclusions, current input hashes, and one current
   clean Git HEAD across all raw records. `make report-diagnostic` can render partial evidence but
   marks it non-publishable.
+- The report now includes complete latency distributions and fixed-seed median CIs, normalized
+  CPU/RAM profiles over time, a native/fallback operator matrix, initial/final AQE plan stability,
+  explicit RQ1/RQ2/RQ3 and H1/H2/H3 findings, attempt-aware failure counts, and report artifact
+  inventory. Its independent content contract must pass in addition to the campaign-evidence gate.
+- A generated 12-slide deck is independently checked for package shape, 16:9 geometry, editable
+  native charts/tables, speaker notes, diagnostic labels, binding to the current report, and an
+  explicit full-deck visual-review attestation. The
+  existing local deck is deliberately diagnostic because its campaign provenance predates the
+  current tracked changes; the final deck must be regenerated after the fresh campaign.
+- A Spark History Server demo profile and staging tool replay one exact baseline/Comet measurement
+  pair from immutable event logs. It verifies the current raw campaign hash, pair identity,
+  correctness, completed applications, exact measured SQL start/end, and report status. A separate
+  live readiness gate then requires exactly those two completed applications and probes their REST,
+  SQL-index, and direct measured-execution pages before recording. Diagnostic evidence is visibly
+  labelled and cannot be finalized as publication video evidence.
+- The video finalizer checks the MP4 container, duration, resolution, explicit visual-review
+  confirmation, application IDs, event-log source, report hash, and Git commit. A strict ZIP64
+  release builder then collects the Git history bundle, raw/report/campaign/control evidence, both
+  full datasets and attestations, slide/video/demo artifacts, restore guide, exact SHA-256 inventory,
+  exact empty control directories, canonical manifest self-hash, and outer archive checksum. It
+  reconstructs control fingerprints at packaging time, refuses dirty/stale/diagnostic input, and
+  never overwrites an existing release.
+- A separate evidence-rotation command now dry-runs by default, accepts only the exact core
+  experiment directories, verifies raw/manifest commit provenance and a byte-level inventory,
+  preserves root sentinels, refuses overwrite, and stages moves with automatic and journaled
+  rollback before a fresh commit's immutable plans are prepared.
 - Hosted unit/static CI plus scheduled/manual native Linux smoke workflow.
 
 Fixed test-count claims are intentionally omitted because they become stale as gates are added. On
@@ -181,6 +207,13 @@ tree:
    are verified rather than semantically rescanned.
 4. Run `make report`, then inspect `results/reports/report-publishability.json`. Draw or publish
    performance conclusions only when it records `publishable: true`.
+5. Generate and visually inspect the final PPTX from that admitted report, then run
+   `make presentation-finalize PRESENTATION_VISUAL_REVIEW_ATTESTATION=1`.
+6. Run `make demo-ui`, record and review the paired Spark History Server comparison, then run
+   `make demo-video-finalize VIDEO_VISUAL_REVIEW_ATTESTATION=1` (and add the full-playback
+   attestation only when automated complete-frame decoding is unavailable).
+7. Run `make evidence-bundle` followed by `make verify-evidence-bundle`, or use the sequential
+   aggregate target `make release` once both final media files exist.
 
 All tracked code and documentation must be finalized before the first campaign. The strict report
 requires raw provenance to equal the current clean HEAD; a later tracked commit intentionally
@@ -188,3 +221,8 @@ invalidates publication until matching campaign evidence is produced.
 
 SF10, a larger backlog catalog, multi-node scale-out, continuous operation, and audited TPC-H
 claims remain outside the primary completion criterion.
+
+At this checkpoint, the report content contract, diagnostic slide deck, Spark UI replay mechanism,
+media sidecar gates, and release packager are implemented. The project is still **not 100% complete**:
+the final tracked commit, fresh ten-campaign rerun at that commit, strict publishable report, final
+non-diagnostic PPTX/MP4, and verified full release ZIP remain outstanding execution artifacts.

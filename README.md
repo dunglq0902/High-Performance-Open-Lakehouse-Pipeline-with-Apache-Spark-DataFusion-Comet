@@ -149,6 +149,7 @@ make research-plan
 
 # Luồng ngắn nhất: benchmark tự chuẩn bị attestation + plan, rồi chạy 10 campaign
 # Không cần chạy make validate-research trước bước này.
+# Nếu đã có suite cũ ở đúng 10 đường dẫn, dry-run rồi lưu trữ nó trước; xem tài liệu bên dưới.
 make benchmark
 make report
 
@@ -157,6 +158,18 @@ make benchmark-one BENCHMARK_CONFIG=benchmark/configs/benchmark-laptop-m02.yaml
 
 # Tương đương benchmark + report
 make run-all PROFILE=benchmark-laptop
+
+# Sau khi report strict ghi publishable: true: replay đúng một cặp Spark UI để quay video
+# Lệnh chờ service khỏe và chỉ thành công khi đúng 2 app + đúng measured SQL đều truy cập được.
+make demo-ui DEMO_EXPERIMENT=EXP-TPCH-SF1-Q01 DEMO_PAIR=1
+
+# Sau khi đã tạo/xem lại slide và video cuối: khóa sidecar rồi đóng gói release ZIP64
+make presentation-finalize PRESENTATION_VISUAL_REVIEW_ATTESTATION=1
+make demo-video-finalize VIDEO_VISUAL_REVIEW_ATTESTATION=1
+# Nếu máy không có ffprobe: chỉ dùng sau khi đã tự phát MP4 từ đầu đến cuối thành công.
+make demo-video-finalize VIDEO_VISUAL_REVIEW_ATTESTATION=1 VIDEO_FULL_PLAYBACK_ATTESTATION=1
+make evidence-bundle
+make verify-evidence-bundle
 ```
 
 `make smoke` cần Docker Linux (Docker Desktop + WSL2 cũng được). Trên `x86_64`, CPU phải hỗ
@@ -215,6 +228,11 @@ là readiness evidence, không phải kết quả benchmark để công bố.
 Các phiên bản, Maven coordinates, OCI digests và source checksums nằm trong
 [`runtime-versions.lock`](runtime-versions.lock). Trạng thái phạm vi đã triển khai và các phần còn
 thiếu nằm trong [`docs/implementation-status.md`](docs/implementation-status.md).
+Quy trình quay/replay UI nằm trong [`docs/spark-ui-demo.md`](docs/spark-ui-demo.md); hợp đồng đóng
+gói và khôi phục bằng chứng nằm trong [`docs/evidence-bundle.md`](docs/evidence-bundle.md).
+Quy trình kiểm tra và khóa video nằm trong [`docs/demo-video.md`](docs/demo-video.md).
+Quy trình lưu trữ an toàn một suite cũ trước khi chạy commit mới nằm trong
+[`docs/research-evidence-archive.md`](docs/research-evidence-archive.md).
 
 ---
 

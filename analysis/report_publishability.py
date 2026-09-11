@@ -1928,7 +1928,8 @@ def _control_artifact_check(
         )
         raw_timestamps = [_parse_utc_timestamp(record.get("timestamp")) for record in records]
         if (
-            any(timestamp is None for timestamp in control_timestamps)
+            not raw_timestamps
+            or any(timestamp is None for timestamp in control_timestamps)
             or any(timestamp is None for timestamp in raw_timestamps)
             or max(timestamp for timestamp in control_timestamps if timestamp is not None)
             >= min(timestamp for timestamp in raw_timestamps if timestamp is not None)
@@ -2350,6 +2351,9 @@ def _verification_check(
         "passed": False,
         "selected_attempt": None,
         "selected_file": None,
+        "execution_attempt_count": None,
+        "failed_attempt_record_count": None,
+        "attempt_counts_verified": False,
         "issues": issues,
     }
     try:
@@ -2382,6 +2386,8 @@ def _verification_check(
     if not isinstance(report, dict):
         issues.append("report must be an object")
         return result
+    result["execution_attempt_count"] = report.get("execution_attempt_count")
+    result["failed_attempt_record_count"] = report.get("failed_attempt_record_count")
 
     if report.get("experiment_id") != experiment.experiment_id:
         issues.append(f"report.experiment_id must equal {experiment.experiment_id!r}")
@@ -2438,6 +2444,8 @@ def _verification_check(
     issues.extend(control_issues)
     if control_artifacts is not None:
         result["control_artifact_evidence"] = control_artifacts
+    if control_artifacts is not None and not control_issues:
+        result["attempt_counts_verified"] = True
 
     manifest_path = campaign_dir / "experiment-manifest.json"
     result["experiment_manifest"] = f"{experiment.experiment_id}/{manifest_path.name}"

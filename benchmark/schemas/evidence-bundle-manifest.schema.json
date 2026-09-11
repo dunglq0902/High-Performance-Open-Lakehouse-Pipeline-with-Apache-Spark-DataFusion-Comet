@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/lakehouse-comet/evidence-bundle-manifest.schema.json",
+  "title": "Lakehouse Comet evidence bundle manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_class",
+    "status",
+    "bundle_filename",
+    "git",
+    "report",
+    "campaigns",
+    "datasets",
+    "presentation_manifest",
+    "video_manifest",
+    "inventory_scope",
+    "empty_directories",
+    "total_empty_directories",
+    "inventory",
+    "total_files",
+    "total_bytes",
+    "integrity_notice",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "artifact_class": {"const": "lakehouse-comet-evidence-bundle-v1"},
+    "status": {"const": "publishable"},
+    "bundle_filename": {"type": "string", "pattern": "^[^/\\\\]+\\.zip$"},
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "repository_bundle"],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "repository_bundle": {"const": "repository.bundle"}
+      }
+    },
+    "report": {"$ref": "#/$defs/boundArtifactPair"},
+    "campaigns": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "experiment_ids",
+        "accepted_raw_records",
+        "execution_attempts",
+        "failed_attempt_records"
+      ],
+      "properties": {
+        "count": {"const": 10},
+        "experiment_ids": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "accepted_raw_records": {"type": "integer", "minimum": 1},
+        "execution_attempts": {"type": "integer", "minimum": 1},
+        "failed_attempt_records": {"type": "integer", "minimum": 0}
+      }
+    },
+    "datasets": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dataset_id",
+          "root",
+          "manifest_path",
+          "manifest_sha256",
+          "attestation_paths"
+        ],
+        "properties": {
+          "dataset_id": {"type": "string", "minLength": 1},
+          "root": {"type": "string", "pattern": "^repository/"},
+          "manifest_path": {"type": "string", "pattern": "^repository/"},
+          "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "attestation_paths": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^repository/"}
+          }
+        }
+      }
+    },
+    "presentation_manifest": {"$ref": "#/$defs/boundArtifact"},
+    "video_manifest": {"$ref": "#/$defs/boundArtifact"},
+    "inventory_scope": {
+      "const": "all archive files excluding RELEASE-MANIFEST.json and SHA256SUMS"
+    },
+    "empty_directories": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/emptyDirectoryEntry"}
+    },
+    "total_empty_directories": {"type": "integer", "minimum": 0},
+    "inventory": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/inventoryEntry"}
+    },
+    "total_files": {"type": "integer", "minimum": 1},
+    "total_bytes": {"type": "integer", "minimum": 1},
+    "integrity_notice": {"type": "string", "minLength": 1},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "boundArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^repository/"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "boundArtifactPair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publishability_path",
+        "publishability_sha256",
+        "inventory_path",
+        "inventory_sha256"
+      ],
+      "properties": {
+        "publishability_path": {"type": "string", "pattern": "^repository/"},
+        "publishability_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "inventory_path": {"type": "string", "pattern": "^repository/"},
+        "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "inventoryEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "roles", "size_bytes", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "emptyDirectoryEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "roles"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^repository/"},
+        "roles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}
