@@ -228,6 +228,8 @@ là readiness evidence, không phải kết quả benchmark để công bố.
 Các phiên bản, Maven coordinates, OCI digests và source checksums nằm trong
 [`runtime-versions.lock`](runtime-versions.lock). Trạng thái phạm vi đã triển khai và các phần còn
 thiếu nằm trong [`docs/implementation-status.md`](docs/implementation-status.md).
+Lộ trình đọc và tự học codebase theo dependency/execution flow nằm trong
+[`docs/learning-roadmap.md`](docs/learning-roadmap.md).
 Quy trình quay/replay UI nằm trong [`docs/spark-ui-demo.md`](docs/spark-ui-demo.md); hợp đồng đóng
 gói và khôi phục bằng chứng nằm trong [`docs/evidence-bundle.md`](docs/evidence-bundle.md).
 Quy trình kiểm tra và khóa video nằm trong [`docs/demo-video.md`](docs/demo-video.md).
