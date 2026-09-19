@@ -235,6 +235,8 @@ gói và khôi phục bằng chứng nằm trong [`docs/evidence-bundle.md`](doc
 Quy trình kiểm tra và khóa video nằm trong [`docs/demo-video.md`](docs/demo-video.md).
 Quy trình lưu trữ an toàn một suite cũ trước khi chạy commit mới nằm trong
 [`docs/research-evidence-archive.md`](docs/research-evidence-archive.md).
+Nếu suite hard-stop giữa chừng, workflow lưu sự cố bất biến, chỉ dùng chẩn đoán nằm trong
+[`docs/partial-research-incident-archive.md`](docs/partial-research-incident-archive.md).
 
 ---
 

@@ -19,6 +19,9 @@ VIDEO_MANIFEST ?= $(patsubst %.mp4,%.manifest.json,$(DEMO_VIDEO))
 RELEASE_BUNDLE ?= deliverables/release/lakehouse-comet-evidence.zip
 EVIDENCE_SOURCE_COMMIT ?=
 EVIDENCE_ARCHIVE_LABEL ?=
+override EVIDENCE_SOURCE_COMMIT := $(value EVIDENCE_SOURCE_COMMIT)
+override EVIDENCE_ARCHIVE_LABEL := $(value EVIDENCE_ARCHIVE_LABEL)
+export EVIDENCE_SOURCE_COMMIT EVIDENCE_ARCHIVE_LABEL
 ECOMMERCE_CORE_CONFIGS := \
 	benchmark/configs/benchmark-laptop-m02.yaml \
 	benchmark/configs/benchmark-laptop-m04.yaml \
@@ -41,7 +44,9 @@ RESEARCH_CORE_CONFIGS := $(ECOMMERCE_CORE_CONFIGS) $(TPCH_CORE_CONFIGS)
 	demo-video-finalize demo-video-finalize-diagnostic \
 	presentation-finalize presentation-finalize-diagnostic evidence-bundle \
 	verify-evidence-bundle archive-research-evidence-dry-run \
-	archive-research-evidence archive-research-evidence-rollback release clean-generated
+	archive-research-evidence archive-research-evidence-rollback \
+	archive-partial-research-incident-dry-run archive-partial-research-incident \
+	archive-partial-research-incident-rollback release clean-generated
 
 setup:
 	$(PYTHON) scripts/bootstrap_env.py
@@ -107,31 +112,58 @@ benchmark-one: setup lint test research-data compose-config
 		--config $(BENCHMARK_CONFIG)
 
 archive-research-evidence-dry-run:
-	@test -n "$(EVIDENCE_SOURCE_COMMIT)" || \
+	@test -n "$${EVIDENCE_SOURCE_COMMIT:-}" || \
 		(echo "EVIDENCE_SOURCE_COMMIT must be the 40-character commit bound to the old raw records." >&2; exit 2)
-	@test -n "$(EVIDENCE_ARCHIVE_LABEL)" || \
+	@test -n "$${EVIDENCE_ARCHIVE_LABEL:-}" || \
 		(echo "EVIDENCE_ARCHIVE_LABEL must be a unique lowercase archive label." >&2; exit 2)
 	$(UV) run python scripts/archive_research_evidence.py \
-		--expected-source-commit $(EVIDENCE_SOURCE_COMMIT) \
-		--label $(EVIDENCE_ARCHIVE_LABEL)
+		--expected-source-commit "$${EVIDENCE_SOURCE_COMMIT}" \
+		--label "$${EVIDENCE_ARCHIVE_LABEL}"
 
 archive-research-evidence:
-	@test -n "$(EVIDENCE_SOURCE_COMMIT)" || \
+	@test -n "$${EVIDENCE_SOURCE_COMMIT:-}" || \
 		(echo "EVIDENCE_SOURCE_COMMIT must be the 40-character commit bound to the old raw records." >&2; exit 2)
-	@test -n "$(EVIDENCE_ARCHIVE_LABEL)" || \
+	@test -n "$${EVIDENCE_ARCHIVE_LABEL:-}" || \
 		(echo "EVIDENCE_ARCHIVE_LABEL must be a unique lowercase archive label." >&2; exit 2)
 	$(UV) run python scripts/archive_research_evidence.py \
-		--expected-source-commit $(EVIDENCE_SOURCE_COMMIT) \
-		--label $(EVIDENCE_ARCHIVE_LABEL) --execute
+		--expected-source-commit "$${EVIDENCE_SOURCE_COMMIT}" \
+		--label "$${EVIDENCE_ARCHIVE_LABEL}" --execute
 
 archive-research-evidence-rollback:
-	@test -n "$(EVIDENCE_SOURCE_COMMIT)" || \
+	@test -n "$${EVIDENCE_SOURCE_COMMIT:-}" || \
 		(echo "EVIDENCE_SOURCE_COMMIT must identify the interrupted archive." >&2; exit 2)
-	@test -n "$(EVIDENCE_ARCHIVE_LABEL)" || \
+	@test -n "$${EVIDENCE_ARCHIVE_LABEL:-}" || \
 		(echo "EVIDENCE_ARCHIVE_LABEL must identify the interrupted archive." >&2; exit 2)
 	$(UV) run python scripts/archive_research_evidence.py \
-		--expected-source-commit $(EVIDENCE_SOURCE_COMMIT) \
-		--label $(EVIDENCE_ARCHIVE_LABEL) --rollback-staging
+		--expected-source-commit "$${EVIDENCE_SOURCE_COMMIT}" \
+		--label "$${EVIDENCE_ARCHIVE_LABEL}" --rollback-staging
+
+archive-partial-research-incident-dry-run:
+	@test -n "$${EVIDENCE_SOURCE_COMMIT:-}" || \
+		(echo "EVIDENCE_SOURCE_COMMIT must be the 40-character commit bound to the incident." >&2; exit 2)
+	@test -n "$${EVIDENCE_ARCHIVE_LABEL:-}" || \
+		(echo "EVIDENCE_ARCHIVE_LABEL must be a unique lowercase incident label." >&2; exit 2)
+	$(UV) run python scripts/archive_partial_research_incident.py \
+		--expected-source-commit "$${EVIDENCE_SOURCE_COMMIT}" \
+		--label "$${EVIDENCE_ARCHIVE_LABEL}"
+
+archive-partial-research-incident:
+	@test -n "$${EVIDENCE_SOURCE_COMMIT:-}" || \
+		(echo "EVIDENCE_SOURCE_COMMIT must be the 40-character commit bound to the incident." >&2; exit 2)
+	@test -n "$${EVIDENCE_ARCHIVE_LABEL:-}" || \
+		(echo "EVIDENCE_ARCHIVE_LABEL must be a unique lowercase incident label." >&2; exit 2)
+	$(UV) run python scripts/archive_partial_research_incident.py \
+		--expected-source-commit "$${EVIDENCE_SOURCE_COMMIT}" \
+		--label "$${EVIDENCE_ARCHIVE_LABEL}" --execute
+
+archive-partial-research-incident-rollback:
+	@test -n "$${EVIDENCE_SOURCE_COMMIT:-}" || \
+		(echo "EVIDENCE_SOURCE_COMMIT must identify the interrupted incident archive." >&2; exit 2)
+	@test -n "$${EVIDENCE_ARCHIVE_LABEL:-}" || \
+		(echo "EVIDENCE_ARCHIVE_LABEL must identify the interrupted incident archive." >&2; exit 2)
+	$(UV) run python scripts/archive_partial_research_incident.py \
+		--expected-source-commit "$${EVIDENCE_SOURCE_COMMIT}" \
+		--label "$${EVIDENCE_ARCHIVE_LABEL}" --rollback-staging
 
 report:
 	$(UV) run python -m analysis.scripts.build_report results/raw --output results/reports \
