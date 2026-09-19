@@ -1,5 +1,8 @@
 # Learning roadmap: High-Performance Open Lakehouse Pipeline
 
+> Bản trace chi tiết theo format caller/callee/input/output/data-next, file importance levels và
+> end-to-end story nằm tại [`execution-and-data-flow-guide.md`](execution-and-data-flow-guide.md).
+
 Tài liệu này là bản đồ học codebase theo **dependency và execution flow**, không theo alphabet và
 không yêu cầu đọc hết từng file. Trục học chính là workload `M02`: đủ nhỏ để hiểu, nhưng đi xuyên
 qua gần như toàn bộ hệ thống từ cấu hình đến báo cáo.
