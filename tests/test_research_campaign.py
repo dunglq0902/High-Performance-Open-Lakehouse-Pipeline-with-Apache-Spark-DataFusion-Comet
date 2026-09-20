@@ -218,11 +218,11 @@ def _staged_logs_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[
     return evidence, source
 
 
-def test_native_event_log_base_ignores_windows_backed_tmpdir(
+def test_native_event_log_base_uses_durable_var_tmp_and_ignores_tmpdir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("TMPDIR", str(tmp_path))
-    assert _native_event_log_base().parent == Path("/tmp")
+    assert _native_event_log_base().parent == Path("/var/tmp")
 
 
 def test_event_log_staging_archives_before_cleanup_and_preserves_pointer(
@@ -230,6 +230,7 @@ def test_event_log_staging_archives_before_cleanup_and_preserves_pointer(
 ) -> None:
     evidence, source = _staged_logs_case(tmp_path, monkeypatch)
     pointer = (evidence / EVENT_LOG_STAGING_FILENAME).read_bytes()
+    assert json.loads(pointer)["schema_version"] == 2
     calls: list[list[str]] = []
 
     def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -247,6 +248,55 @@ def test_event_log_staging_archives_before_cleanup_and_preserves_pointer(
     assert calls[1][calls[1].index("--volume") + 1] == (f"{source}:{EVENT_LOG_CONTAINER_ROOT}")
     assert _archive_event_log_staging(evidence) == archive
     assert len(calls) == 2
+
+
+def test_event_log_staging_v1_uses_only_legacy_native_base(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    evidence, current_source = _staged_logs_case(tmp_path, monkeypatch)
+    pointer_path = evidence / EVENT_LOG_STAGING_FILENAME
+    pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
+    pointer["schema_version"] = 1
+    pointer_path.write_text(json.dumps(pointer), encoding="utf-8")
+
+    legacy_base = tmp_path / "legacy"
+    legacy_base.mkdir(mode=0o700)
+    legacy_source = legacy_base / current_source.name
+    legacy_source.mkdir(mode=0o777)
+    legacy_source.chmod(0o777)
+    (legacy_source / "legacy-events").write_bytes(b"schema-v1")
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._legacy_native_event_log_base", lambda: legacy_base
+    )
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 0, stdout="", stderr=""),
+    )
+
+    archive = _archive_event_log_staging(evidence)
+
+    assert (archive / "legacy-events").read_bytes() == b"schema-v1"
+    assert not legacy_source.exists()
+    assert current_source.is_dir()
+
+
+@pytest.mark.parametrize("schema_version", [0, 3, "2", True, None])
+def test_event_log_staging_rejects_unknown_pointer_schema_before_root_helper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, schema_version: object
+) -> None:
+    evidence, source = _staged_logs_case(tmp_path, monkeypatch)
+    pointer = evidence / EVENT_LOG_STAGING_FILENAME
+    value = json.loads(pointer.read_text(encoding="utf-8"))
+    value["schema_version"] = schema_version
+    pointer.write_text(json.dumps(value), encoding="utf-8")
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._run", lambda *_args, **_kwargs: pytest.fail("root helper")
+    )
+
+    with pytest.raises(CampaignError, match="recovery pointer"):
+        _archive_event_log_staging(evidence)
+
+    assert source.is_dir()
 
 
 @pytest.mark.parametrize("token", ["../outside", "/tmp/outside", "events-wrong-12345678"])
@@ -925,6 +975,58 @@ def test_docker_executor_recovers_one_admitted_orphan_without_deleting_evidence(
         failure_root=failure_root,
     )
     assert list(failure_root.rglob("*.json")) == [failure_path]
+
+
+def test_closed_failed_attempt_reconciles_native_staging_without_changing_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    executor, run, first, failure_root, raw_path = _interrupted_recovery_case(tmp_path, monkeypatch)
+    executor.recover_interrupted_attempt(run, raw_path=raw_path, failure_root=failure_root)
+    failure_path = next(failure_root.rglob("*.json"))
+    failure_bytes = failure_path.read_bytes()
+
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._native_event_log_base", lambda: tmp_path / "native"
+    )
+    source = _create_event_log_staging(first, "lakehouse-bench-" + "a" * 16)
+    (source / "events").write_bytes(b"retained after terminal failure")
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 0, stdout="", stderr=""),
+    )
+
+    executor.recover_interrupted_attempt(run, raw_path=raw_path, failure_root=failure_root)
+
+    assert (first / "spark-events/events").read_bytes() == b"retained after terminal failure"
+    assert not source.exists()
+    assert failure_path.read_bytes() == failure_bytes
+
+
+def test_invalid_attempt_topology_cannot_mutate_native_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    executor, run, first, failure_root, raw_path = _interrupted_recovery_case(tmp_path, monkeypatch)
+    failure_directory = failure_root / run.experiment_id / run.engine
+    failure_directory.mkdir(parents=True)
+    for attempt in (1, 2):
+        (failure_directory / f"{run.run_id}-attempt-{attempt:04d}.json").write_text(
+            "{}\n", encoding="utf-8"
+        )
+
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._native_event_log_base", lambda: tmp_path / "native"
+    )
+    source = _create_event_log_staging(first, "lakehouse-bench-" + "a" * 16)
+    (source / "events").write_bytes(b"must remain untouched")
+    monkeypatch.setattr(
+        "scripts.run_research_campaign._run", lambda *_args, **_kwargs: pytest.fail("root helper")
+    )
+
+    with pytest.raises(CampaignError, match="terminal records outnumber"):
+        executor.recover_interrupted_attempt(run, raw_path=raw_path, failure_root=failure_root)
+
+    assert (source / "events").read_bytes() == b"must remain untouched"
+    assert not (first / "spark-events").exists()
 
 
 @pytest.mark.parametrize(

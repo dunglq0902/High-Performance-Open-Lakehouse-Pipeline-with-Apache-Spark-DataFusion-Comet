@@ -47,9 +47,19 @@ Missing experiment roots stay absent. Their absence is explicit in `suite_state`
 
 ## Archive an interrupted suite
 
-First stop any surviving one-off benchmark container and recover its native Spark event-log staging
-with the campaign recovery helper. Do not delete, edit, or reclassify the terminal failure JSON.
-Ensure no campaign process is still writing to `results/raw` or `.artifacts/campaigns`.
+First stop any surviving one-off benchmark container. Before invoking this incident archiver,
+re-run the same suite or campaign entry point once so its interrupted-attempt preflight can
+reconcile recoverable native Spark event-log staging while the attempt remains at its original
+path. A terminal non-retryable failure still hard-stops after that reconciliation; recovery does
+not resume or reclassify the run. Schema-v1 pointers resolve only under the legacy private
+`/tmp/lakehouse-campaign-events-<uid>` root; schema-v2 pointers resolve only under
+`/var/tmp/lakehouse-campaign-events-<uid>`. The incident archiver intentionally does not perform
+that recovery after moving evidence because the token is bound to the original attempt path.
+
+Do not change ownership or manufacture an archive when the pointer/token is missing or invalid, or
+when its referenced source is missing or not user-owned. Preserve whatever pointer and terminal
+failure evidence exists instead. Do not delete, edit, or reclassify that failure JSON. Ensure no
+campaign process is still writing to `results/raw` or `.artifacts/campaigns`.
 
 Run the read-only plan and review the destination, per-experiment state, counts, and hashes:
 

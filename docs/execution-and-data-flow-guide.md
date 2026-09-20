@@ -365,6 +365,15 @@ load_experiment()
   → application-result.json
 ```
 
+Trước `spark-submit`, executor tạo một thư mục staging riêng dưới native `/var/tmp` và ghi pointer
+schema v2 gồm token bị ràng buộc với đường dẫn attempt cùng tên container. Reader chỉ ánh xạ schema
+v1 cũ tới `/tmp` và schema v2 tới `/var/tmp`; evidence không thể truyền vào một đường dẫn tùy ý.
+Sau khi client dừng, launcher kiểm tra container không còn chạy, bàn giao quyền đọc trong phạm vi
+đúng thư mục, copy event log vào attempt, rồi mới xóa nguồn native sau khi revalidation. Nếu bất kỳ
+bước nào lỗi, admission hard-stop. Cleanup nguồn chỉ bắt đầu sau khi archive hoàn chỉnh đã được
+publish; lỗi trước cleanup giữ lại nguồn và pointer, còn khả năng recovery cuối cùng vẫn phụ thuộc
+trạng thái filesystem và chính sách lưu giữ của host.
+
 ### Step 8 — Parse metrics và publish raw result
 
 ```text

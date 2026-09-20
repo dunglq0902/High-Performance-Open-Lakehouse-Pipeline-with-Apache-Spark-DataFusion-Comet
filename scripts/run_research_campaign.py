@@ -561,18 +561,39 @@ def _find_event_log(application_id: str, source_root: Path = EVENT_LOG_ROOT) -> 
 
 
 def _native_event_log_base() -> Path:
-    """Ignore TMPDIR: a repository or Windows-backed temporary directory cannot chmod."""
+    """Use durable native Linux storage, never a Windows-backed or tmpfs temporary root."""
+
+    if os.name == "nt":
+        raise CampaignError("native event-log staging requires Linux/WSL")
+    # WSL commonly mounts /tmp as tmpfs, so a distro restart can erase the only copy of a
+    # Spark event log before interrupted-attempt recovery runs. /var/tmp stays on the distro's
+    # native filesystem while still keeping this transient evidence outside the repository.
+    return Path("/var/tmp") / f"lakehouse-campaign-events-{os.getuid()}"
+
+
+def _legacy_native_event_log_base() -> Path:
+    """Resolve schema-v1 pointers without silently retargeting their native source."""
 
     if os.name == "nt":
         raise CampaignError("native event-log staging requires Linux/WSL")
     return Path("/tmp") / f"lakehouse-campaign-events-{os.getuid()}"
 
 
-def _event_log_staging_path(evidence_dir: Path, token: str) -> Path:
+def _event_log_staging_base(schema_version: object) -> Path:
+    if not isinstance(schema_version, int) or isinstance(schema_version, bool):
+        raise CampaignError("invalid event-log staging recovery pointer")
+    if schema_version == 1:
+        return _legacy_native_event_log_base()
+    if schema_version == 2:
+        return _native_event_log_base()
+    raise CampaignError("invalid event-log staging recovery pointer")
+
+
+def _event_log_staging_path(evidence_dir: Path, token: str, *, base: Path | None = None) -> Path:
     identity = hashlib.sha256(str(evidence_dir.resolve()).encode()).hexdigest()[:16]
     if re.fullmatch(rf"events-{identity}-[a-z0-9_]{{8}}", token) is None:
         raise CampaignError("invalid native event-log staging token")
-    base = _native_event_log_base()
+    base = _native_event_log_base() if base is None else base
     source = base / token
     if (
         base.is_symlink()
@@ -599,7 +620,7 @@ def _create_event_log_staging(evidence_dir: Path, container_name: str) -> Path:
     _event_log_staging_path(evidence_dir, source.name)
     write_json(
         evidence_dir / EVENT_LOG_STAGING_FILENAME,
-        {"schema_version": 1, "token": source.name, "container_name": container_name},
+        {"schema_version": 2, "token": source.name, "container_name": container_name},
     )
     return source
 
@@ -641,8 +662,8 @@ def _make_event_logs_host_readable(source: Path) -> None:
 def _archive_event_log_staging(evidence_dir: Path) -> Path:
     """Copy stopped application logs before removing their validated native temporary tree.
 
-    A crash, active container, permission error, or partial archive leaves the original logs and
-    the immutable recovery token intact. An interrupted copy is intentionally not overwritten.
+    Failures before cleanup leave the original logs and immutable recovery token in place. Native
+    cleanup starts only after the complete copy is published; an interrupted copy is not replaced.
     """
 
     archive = evidence_dir / "spark-events"
@@ -651,14 +672,15 @@ def _archive_event_log_staging(evidence_dir: Path) -> Path:
             raise CampaignError("event-log archive is not a real directory")
         return archive
     pointer = json.loads((evidence_dir / EVENT_LOG_STAGING_FILENAME).read_text(encoding="utf-8"))
-    if not isinstance(pointer, dict) or pointer.get("schema_version") != 1:
+    if not isinstance(pointer, dict):
         raise CampaignError("invalid event-log staging recovery pointer")
+    base = _event_log_staging_base(pointer.get("schema_version"))
     token, container_name = pointer.get("token"), pointer.get("container_name")
     if not isinstance(token, str) or not isinstance(container_name, str):
         raise CampaignError("incomplete event-log staging recovery pointer")
     if re.fullmatch(r"lakehouse-(?:bench|medallion)-[a-f0-9]{16}", container_name) is None:
         raise CampaignError("invalid event-log staging container identity")
-    source = _event_log_staging_path(evidence_dir, token)
+    source = _event_log_staging_path(evidence_dir, token, base=base)
     states = _run(
         [
             "docker",
@@ -679,7 +701,7 @@ def _archive_event_log_staging(evidence_dir: Path) -> Path:
     _copy_event_log(source, copying)
     copying.rename(archive)
     # Revalidate the exact owned temporary target immediately before recursive cleanup.
-    shutil.rmtree(_event_log_staging_path(evidence_dir, token))
+    shutil.rmtree(_event_log_staging_path(evidence_dir, token, base=base))
     return archive
 
 
@@ -1560,7 +1582,7 @@ class DockerCampaignExecutor:
         raw_path: Path,
         failure_root: Path,
     ) -> None:
-        """Close one admitted attempt that was interrupted before its terminal JSON publish."""
+        """Reconcile native logs, then close one attempt interrupted before terminal publish."""
 
         attempts = _run_attempt_directories(self.artifact_root, run.run_id)
         failure_directory = failure_root / run.experiment_id / run.engine
@@ -1588,21 +1610,24 @@ class DockerCampaignExecutor:
         if raw_path.exists() and len(attempts) != closed_attempts:
             raise CampaignError(f"run attempts unexpectedly continue after success: {run.run_id}")
         orphan_count = len(attempts) - closed_attempts
-        if orphan_count == 0:
-            return
-        if orphan_count != 1 or raw_path.exists():
+        if orphan_count not in {0, 1} or (orphan_count == 1 and raw_path.exists()):
             raise CampaignError(
                 f"run {run.run_id} has {orphan_count} interrupted attempts; "
                 "only one sequential crash can be recovered"
             )
 
+        # A terminal invalid_environment record can coexist with native staging when Docker
+        # disappeared during archival. Reconcile only after the attempt topology is trusted, then
+        # preserve the non-retryable hard stop without changing its record or retry budget.
+        for _attempt, run_dir in attempts:
+            if (run_dir / EVENT_LOG_STAGING_FILENAME).is_file():
+                _archive_event_log_staging(run_dir)
+        if orphan_count == 0:
+            return
+
         attempt, run_dir = attempts[-1]
         application_path = run_dir / "application-result.json"
         has_application_result = application_path.exists() or application_path.is_symlink()
-        if (run_dir / EVENT_LOG_STAGING_FILENAME).is_file():
-            # Do not read/alter a still-running driver's logs or overwrite a partial copy.
-            # Existing application results still take the hard-stop path below after archival.
-            _archive_event_log_staging(run_dir)
         for path in (
             run_dir / "stdout.log",
             run_dir / "stderr.log",

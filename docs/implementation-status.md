@@ -64,12 +64,18 @@ publishable.
   collector calibration, Medallion audit, and every referenced event log, plan, resource sample,
   stdout, and stderr file. A successful resume records executed/resumed and total/failed-attempt
   counters without overwriting earlier evidence.
-- Spark 4 rolling event-log V2 directories use a separate native Linux temporary mount for each
-  Medallion or campaign application, avoiding the Windows/WSL bind-mount `chmod` failure while
-  keeping Spark non-root and its event-log configuration unchanged. After the client stops, a
+- Spark 4 rolling event-log V2 directories use a separate durable native Linux `/var/tmp` mount for
+  each Medallion or campaign application, avoiding both the Windows/WSL bind-mount `chmod` failure
+  and loss from WSL's tmpfs-backed `/tmp` across a distro restart, while keeping Spark non-root and
+  its event-log configuration unchanged. New recovery pointers use schema v2; the reader maps
+  legacy schema v1 only to `/tmp` and v2 only to `/var/tmp`; evidence supplies only a validated
+  basename token, never an arbitrary root or absolute path.
+  After the client stops, a
   scoped container-side permission handoff precedes immutable archival into that attempt's evidence
-  tree. An archival failure retains the native logs and recovery pointer and blocks admission;
-  retries do not overwrite earlier event logs. Benchmark profiles explicitly disable event-log
+  tree. Native cleanup starts only after the complete archive is published and its exact owned
+  source is revalidated. Failures before cleanup preserve the source and pointer; any failure blocks
+  admission, recovery availability still depends on host/filesystem state, and retries do not
+  overwrite earlier event logs. Benchmark profiles explicitly disable event-log
   compression so the strict dependency-free JSON parser consumes the exact emitted segments.
 - Spark event-log attribution by measured `jobGroupId`, 200-ms worker/driver resource sampling,
   collector calibration below 2%, conservative final-AQE plan analysis, exact result hashes,
@@ -125,9 +131,10 @@ gate. The native readiness evidence remains:
   successfully with the reviewed command.
 - A real Spark analyzer run confirmed the expected schemas for Q01, Q03, Q06, and Q12.
 - On 2026-09-04, a default non-root Spark client completed a local count query with the benchmark
-  event-log settings and the native staging mount. Its rolling V2 log was archived and rediscovered
-  successfully; `.artifacts/diagnostics/spark-event-log-probe-20260904/verification.json` records this
-  readiness check. It is not research performance evidence.
+  event-log settings and the then-current native staging mount. Its rolling V2 log was archived and
+  rediscovered successfully; `.artifacts/diagnostics/spark-event-log-probe-20260904/verification.json`
+  records that historical permission-handoff check. It predates the `/var/tmp` durability change
+  and is not research performance evidence.
 
 ## Primary data state
 
