@@ -183,9 +183,9 @@ def _demo_application(
         "query_wall_time_ms": 700,
         "sql_execution_time_ms": measured_end - measured_start,
         "spark_conf_sha256": "d" * 64,
-        "native_coverage_ratio": 0.0 if engine == "spark_baseline" else 1.0,
+        "native_coverage_ratio": None if engine == "spark_baseline" else 1.0,
         "native_operator_count": 0 if engine == "spark_baseline" else 4,
-        "fallback_operator_count": 4 if engine == "spark_baseline" else 0,
+        "fallback_operator_count": 0,
         "transition_count": 0,
     }
 

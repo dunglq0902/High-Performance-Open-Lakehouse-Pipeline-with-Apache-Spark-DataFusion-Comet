@@ -997,12 +997,15 @@ def _demo_manifest_binding(
         _positive_number(value.get("query_wall_time_ms"), label="query wall time")
         _required_sha256(value.get("spark_conf_sha256"), label="Spark configuration hash")
         native_coverage = value.get("native_coverage_ratio")
-        if (
+        if engine == "spark_baseline":
+            if native_coverage is not None:
+                raise EvidenceBundleError("baseline demo native coverage ratio must be null")
+        elif (
             isinstance(native_coverage, bool)
             or not isinstance(native_coverage, int | float)
-            or not 0 <= native_coverage <= 1
+            or not 0 <= float(native_coverage) <= 1
         ):
-            raise EvidenceBundleError("demo native coverage ratio is invalid")
+            raise EvidenceBundleError("Comet demo native coverage ratio is invalid")
         for field in ("native_operator_count", "fallback_operator_count", "transition_count"):
             _nonnegative_integer(value.get(field), label=f"demo {field}")
 
