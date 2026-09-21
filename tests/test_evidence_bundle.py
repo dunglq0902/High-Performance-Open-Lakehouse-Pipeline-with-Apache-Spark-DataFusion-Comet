@@ -454,6 +454,7 @@ def _bundle_inputs(root: Path, output_name: str) -> tuple[list[BundleSource], di
             )
         if experiment_id == "EXP-00":
             _write(run_root / "run-0000/attempt-0001/event-log/events", b"spark_baseline\n")
+            _write(run_root / "run-0000/attempt-0001/event-log-staging.json", b"{}\n")
             _write(run_root / "run-0001/attempt-0001/event-log/events", b"comet_accelerated\n")
         failed_root = campaign_root / "failed-attempts"
         failed_root.mkdir()

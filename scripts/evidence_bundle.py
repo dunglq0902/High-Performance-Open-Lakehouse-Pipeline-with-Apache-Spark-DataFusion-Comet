@@ -2007,9 +2007,16 @@ def _directory_inventory_from_bundle(
     empty_directories: set[str],
 ) -> tuple[list[str], list[str]]:
     prefix = f"{archive_root}/"
-    files = sorted(path for path in inventory if path.startswith(prefix))
+    def path_order(value: str) -> tuple[str, ...]:
+        return PurePosixPath(value).parts
+
+    files = sorted(
+        (path for path in inventory if path.startswith(prefix)),
+        key=path_order,
+    )
     declared_empty = sorted(
-        path for path in empty_directories if path == archive_root or path.startswith(prefix)
+        (path for path in empty_directories if path == archive_root or path.startswith(prefix)),
+        key=path_order,
     )
     if archive_root not in empty_directories and not files and not declared_empty:
         raise EvidenceBundleError(f"bundled control directory is missing: {archive_root}")
@@ -2028,7 +2035,7 @@ def _directory_inventory_from_bundle(
         while parent != root:
             directories.add(parent.as_posix())
             parent = parent.parent
-    return sorted(directories), files
+    return sorted(directories, key=path_order), files
 
 
 def _bundled_raw_campaigns(
