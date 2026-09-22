@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import platform
 import re
@@ -55,6 +56,8 @@ SOURCE_ROW_NORMALIZATION = {
 }
 _GIT_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _PYTHON_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+_SCHEMA_FIELDS = {name: tuple(schema) for name, schema in TPCH_SCHEMAS.items()}
+_LOG = logging.getLogger(__name__)
 
 
 class TpchContractError(RuntimeError):
@@ -91,39 +94,40 @@ def _manifest_hash(value: Mapping[str, object]) -> str:
 
 
 def _parse_value(field: pa.Field, text: str, *, table: str, line_number: int) -> object:
-    location = f"{table}.tbl:{line_number}:{field.name}"
+    field_type = field.type
     if "\x00" in text:
-        raise TpchContractError(f"{location} contains a NUL byte")
+        raise TpchContractError(f"{table}.tbl:{line_number}:{field.name} contains a NUL byte")
     try:
-        if pa.types.is_int64(field.type) or pa.types.is_int32(field.type):
+        if pa.types.is_int64(field_type) or pa.types.is_int32(field_type):
             integer = int(text)
             if str(integer) != text and not (text.startswith("+") and str(integer) == text[1:]):
                 raise ValueError("non-canonical integer")
-            if pa.types.is_int32(field.type) and not -(2**31) <= integer < 2**31:
+            if pa.types.is_int32(field_type) and not -(2**31) <= integer < 2**31:
                 raise ValueError("integer exceeds INT32")
             return integer
-        if pa.types.is_decimal(field.type):
+        if pa.types.is_decimal(field_type):
             decimal_value = Decimal(text)
             if not decimal_value.is_finite():
                 raise ValueError("decimal is not finite")
-            quantum = Decimal(1).scaleb(-field.type.scale)
+            quantum = Decimal(1).scaleb(-field_type.scale)
             if decimal_value.quantize(quantum) != decimal_value:
-                raise ValueError(f"decimal has more than {field.type.scale} fractional digits")
+                raise ValueError(f"decimal has more than {field_type.scale} fractional digits")
             return decimal_value.quantize(quantum)
-        if pa.types.is_date32(field.type):
+        if pa.types.is_date32(field_type):
             return date.fromisoformat(text)
-        if pa.types.is_string(field.type):
+        if pa.types.is_string(field_type):
             return text
     except (InvalidOperation, OverflowError, ValueError) as error:
-        raise TpchContractError(f"{location} has invalid {field.type}: {text!r}") from error
-    raise TpchContractError(f"{location} uses unsupported type {field.type}")
+        location = f"{table}.tbl:{line_number}:{field.name}"
+        raise TpchContractError(f"{location} has invalid {field_type}: {text!r}") from error
+    raise TpchContractError(f"{table}.tbl:{line_number}:{field.name} uses unsupported {field_type}")
 
 
 def parse_tbl_row(table_name: str, raw_line: str, line_number: int) -> dict[str, object]:
     if table_name not in TPCH_SCHEMAS:
         raise TpchContractError(f"unknown TPC-H table: {table_name}")
     line = raw_line.rstrip("\r\n")
-    schema = TPCH_SCHEMAS[table_name]
+    schema = _SCHEMA_FIELDS[table_name]
     values = line.split("|")
     if len(values) != len(schema) and line.endswith("|"):
         values = line[:-1].split("|")
@@ -216,6 +220,20 @@ class _TableAudit:
     def __init__(self, table_name: str) -> None:
         self.table_name = table_name
         self.schema = TPCH_SCHEMAS[table_name]
+        self.encoded_fields = tuple(
+            (
+                field.name,
+                "I"
+                if pa.types.is_integer(field.type)
+                else "D"
+                if pa.types.is_decimal(field.type)
+                else "A"
+                if pa.types.is_date32(field.type)
+                else "S",
+                field.type.scale if pa.types.is_decimal(field.type) else None,
+            )
+            for field in self.schema
+        )
         self.primary_key = PRIMARY_KEYS[table_name]
         self.row_count = 0
         self.previous_key: tuple[int, ...] | None = None
@@ -240,16 +258,28 @@ class _TableAudit:
         self.previous_key = key
 
         encoded = bytearray()
-        for field in self.schema:
-            scalar = _encode_scalar(field, row[field.name])
+        for name, kind, scale in self.encoded_fields:
+            value = row[name]
+            if kind == "I":
+                if isinstance(value, bool) or not isinstance(value, int):
+                    raise TpchContractError(f"{name} is not an integer")
+                scalar = b"I" + str(value).encode("ascii")
+            elif kind == "D":
+                if not isinstance(value, Decimal):
+                    raise TpchContractError(f"{name} is not a decimal")
+                scalar = b"D" + f"{value:.{scale}f}".encode("ascii")
+            elif kind == "A":
+                if not isinstance(value, date):
+                    raise TpchContractError(f"{name} is not a date")
+                scalar = b"A" + value.isoformat().encode("ascii")
+                self.date_minimum[name] = min(self.date_minimum.get(name, value), value)
+                self.date_maximum[name] = max(self.date_maximum.get(name, value), value)
+            else:
+                if not isinstance(value, str):
+                    raise TpchContractError(f"{name} is not a string")
+                scalar = b"S" + value.encode("utf-8")
             encoded.extend(struct.pack(">I", len(scalar)))
             encoded.extend(scalar)
-            if pa.types.is_date32(field.type):
-                value = row[field.name]
-                if not isinstance(value, date):
-                    raise TpchContractError(f"{field.name} is not a date")
-                self.date_minimum[field.name] = min(self.date_minimum.get(field.name, value), value)
-                self.date_maximum[field.name] = max(self.date_maximum.get(field.name, value), value)
         self.digest.update(struct.pack(">Q", len(encoded)))
         self.digest.update(encoded)
         self.row_count += 1
@@ -290,6 +320,7 @@ def _convert_table(
 ) -> dict[str, Any]:
     if target_file_size_bytes < 1 or row_group_rows < 1:
         raise ValueError("Parquet file and row-group targets must be positive")
+    _LOG.info("Converting %s: expected %s rows", table_name, expected_rows)
     schema = TPCH_SCHEMAS[table_name]
     table_dir = dataset_root / table_name
     table_dir.mkdir(parents=True, exist_ok=False)
@@ -340,6 +371,8 @@ def _convert_table(
     try:
         for row in iter_normalized_tbl_rows(raw_path, table_name):
             audit.add(row)
+            if audit.row_count % 1_000_000 == 0:
+                _LOG.info("Converted %s: %s/%s rows", table_name, audit.row_count, expected_rows)
             pending.append(row)
             if len(pending) == row_group_rows:
                 flush()
@@ -487,6 +520,7 @@ def _validate_parquet_tables(
     }
 
     for table_name in TABLE_ORDER:
+        _LOG.info("Validating Parquet keys, dates and row count: %s", table_name)
         paths = sorted((dataset_root / table_name).glob("part-*.parquet"))
         if not paths:
             raise TpchContractError(f"{table_name} has no Parquet files")

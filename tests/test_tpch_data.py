@@ -47,6 +47,17 @@ from scripts.ensure_tpch_data import (
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMIT = "1" * 40
+# Captured with the pre-optimization converter at commit 1d6956c.
+TINY_CONTENT_HASHES = {
+    "region": "20c3843a6eaf5c3ec03530cfe986195626c0b53470c9379254bce3cf354fbf9a",
+    "nation": "b221b2fe7089b010527ff56e12db3daf34ad7a98305bdc73834d206e7e89272d",
+    "supplier": "9c281c4cf6e3ec4b8ae0b3128ccd12f4e32e748e330551ab1f851dc55d12808e",
+    "customer": "9289d154710d7ee918a568cc8cad70643cb1fde74981689984d60f8715c39d98",
+    "part": "24bfe67c5e2f5a87b8dbf8805e4e5151a7d97a9e171c3651feeb283d02dad1d3",
+    "partsupp": "07b2161ca8b0dd48f2c7926f15acf3c0659341b81b9a472660f0fb6ed8e6b09f",
+    "orders": "ea5ee60a97f7d25dbb37daa90419a500c07c3d8bd6728e1f31ced29fdcbca6f0",
+    "lineitem": "6c9b7b454f7aae8b65da2647d9de2598306eefcc3b09f406c2066c1944544ac7",
+}
 SOURCE = {
     "name": "tpch-dbgen",
     "version": f"commit-{COMMIT}",
@@ -170,6 +181,9 @@ def test_tiny_tpch_conversion_is_atomic_hash_bound_and_revalidates(tmp_path: Pat
     )
 
     assert result.manifest["notice"] == NOTICE
+    assert {
+        table: record["content_sha256"] for table, record in result.manifest["tables"].items()
+    } == TINY_CONTENT_HASHES
     assert result.manifest["benchmark_eligible"] is True
     assert result.manifest["generator"]["version"] == CONVERTER_VERSION
     assert result.manifest["generator"]["python_implementation"] == "CPython"

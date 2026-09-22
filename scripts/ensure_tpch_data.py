@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import platform
 import re
 import shutil
@@ -193,6 +194,7 @@ def ensure_tpch_data(
         prefix=f"tpch-sf{scale_factor}-raw-", dir=raw_parent
     ) as temporary:
         raw_dir = Path(temporary) / "raw"
+        logging.info("Generating pinned DBGEN SF%s in %s", scale_factor, raw_dir)
         if scale_factor == 1:
             table_materializer(source_lock, cache_dir, raw_dir)
         else:
@@ -223,6 +225,7 @@ def ensure_tpch_data(
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     parser = argparse.ArgumentParser()
     parser.add_argument("--generate", action="store_true")
     parser.add_argument("--scale-factor", type=int, choices=(1, 10), default=1)
