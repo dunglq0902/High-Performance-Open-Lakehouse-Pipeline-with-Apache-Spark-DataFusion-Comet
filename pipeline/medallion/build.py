@@ -287,7 +287,8 @@ def _is_tpch_manifest(manifest: Mapping[str, Any]) -> bool:
     storage = manifest.get("storage")
     tables = manifest.get("tables")
     return (
-        manifest.get("scale_factor") == 1
+        type(manifest.get("scale_factor")) is int
+        and manifest.get("scale_factor") in (1, 10)
         and isinstance(storage, Mapping)
         and storage.get("profile") == "tpch_parquet"
         and isinstance(tables, Mapping)
@@ -504,7 +505,7 @@ def main() -> None:
                     "dataset_manifest_sha256": sha256_file(args.dataset_manifest),
                     "dataset_validation_attestation_sha256": attestation_sha256,
                     "benchmark_eligible": bool(manifest["benchmark_eligible"]),
-                    "scale_factor": 1,
+                    "scale_factor": manifest["scale_factor"],
                     "table_counts": table_counts,
                     "quality": manifest["validation"],
                     "snapshots": tpch_snapshots,
