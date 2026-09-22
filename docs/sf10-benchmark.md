@@ -14,7 +14,8 @@ the original SF1 catalog, data, and evidence.
 ```bash
 export COMPOSE_PROJECT_NAME=lakehouse-comet-sf10
 uv sync --all-extras --frozen --python /opt/cpython-3.12.13/bin/python3.12
-uv run python scripts/ensure_tpch_data.py --generate --scale-factor 10
+uv run python scripts/ensure_tpch_data.py --generate --scale-factor 10 \
+  --cache /tmp/lakehouse-sf10/dbgen --scratch /tmp/lakehouse-sf10/raw
 uv run python scripts/run_research_suite.py \
   --config benchmark/configs/benchmark-laptop-tpch-sf10-q01.yaml \
   --config benchmark/configs/benchmark-laptop-tpch-sf10-q03.yaml \
@@ -28,6 +29,9 @@ rows, not ten times its SF1 count; see the independent
 [DuckDB SF10 example](https://duckdb.org/2025/05/23/arrow-ipc-support-in-duckdb).
 Foreign keys for lineitem are validated per Parquet file to bound memory;
 primary-key ordering is still checked across file boundaries.
+On WSL, place DBGEN cache and scratch on the Linux filesystem: DBGEN performs
+many small writes, which are slow across the Windows filesystem boundary.
+Both final-output and scratch capacity are checked before generation.
 
 Resume by repeating the same suite command from the same commit and image.
 Do not regenerate or overwrite existing raw results. A failed capacity or

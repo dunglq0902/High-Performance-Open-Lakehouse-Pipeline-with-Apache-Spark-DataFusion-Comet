@@ -127,6 +127,7 @@ def ensure_tpch_data(
     root: Path = ROOT,
     output_dir: Path = DATASET_PATH,
     cache_dir: Path = CACHE_PATH,
+    scratch_dir: Path | None = None,
     runtime_lock_path: Path = RUNTIME_LOCK_PATH,
     minimum_free_bytes: int = MINIMUM_FREE_BYTES,
     git_probe: GitProbe = _git_probe,
@@ -184,8 +185,12 @@ def ensure_tpch_data(
     )
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
+    raw_parent = output_dir.parent if scratch_dir is None else scratch_dir
+    if scratch_dir is not None and disk_probe(raw_parent) < minimum_free_bytes:
+        raise PrimaryTpchGateError("insufficient free disk for TPC-H scratch directory")
+    raw_parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
-        prefix=f"tpch-sf{scale_factor}-raw-", dir=output_dir.parent
+        prefix=f"tpch-sf{scale_factor}-raw-", dir=raw_parent
     ) as temporary:
         raw_dir = Path(temporary) / "raw"
         if scale_factor == 1:
@@ -223,12 +228,14 @@ def main() -> None:
     parser.add_argument("--scale-factor", type=int, choices=(1, 10), default=1)
     parser.add_argument("--output", type=Path, default=DATASET_PATH)
     parser.add_argument("--cache", type=Path, default=CACHE_PATH)
+    parser.add_argument("--scratch", type=Path)
     args = parser.parse_args()
     result = ensure_tpch_data(
         generate=args.generate,
         scale_factor=args.scale_factor,
         output_dir=args.output.resolve(),
         cache_dir=args.cache.resolve(),
+        scratch_dir=args.scratch.resolve() if args.scratch else None,
     )
     print(json.dumps(result, sort_keys=True))
 

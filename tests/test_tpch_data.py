@@ -42,6 +42,7 @@ from scripts.ensure_tpch_data import (
     PrimaryTpchGateError,
     _locked_python_version,
     _require_primary_gate,
+    ensure_tpch_data,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -127,6 +128,25 @@ def test_sf10_manifest_binds_scale_command_and_exact_counts(tmp_path: Path) -> N
     result.manifest_path.write_text(json.dumps(result.manifest), encoding="utf-8")
     with pytest.raises(TpchContractError, match="generation metadata"):
         validate_tpch_dataset(output, expected_counts=counts)
+
+
+def test_sf10_scratch_disk_gate_precedes_materialization(tmp_path: Path) -> None:
+    scratch = tmp_path / "linux-scratch"
+
+    def materializer(*args: object, **kwargs: object) -> None:
+        pytest.fail("DBGEN must not run when scratch has insufficient capacity")
+
+    with pytest.raises(PrimaryTpchGateError, match="scratch directory"):
+        ensure_tpch_data(
+            generate=True,
+            scale_factor=10,
+            output_dir=tmp_path / "sf10",
+            cache_dir=tmp_path / "cache",
+            scratch_dir=scratch,
+            git_probe=lambda root: (COMMIT, False),
+            disk_probe=lambda path: 1 if path == scratch else 100 * 1024**3,
+            table_materializer=materializer,
+        )
 
 
 def test_tiny_tpch_conversion_is_atomic_hash_bound_and_revalidates(tmp_path: Path) -> None:
