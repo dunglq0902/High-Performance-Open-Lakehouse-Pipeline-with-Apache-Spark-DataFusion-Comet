@@ -26,13 +26,13 @@ from data.tpch.contract import (
     DATE_RANGES,
     FOREIGN_KEYS,
     PRIMARY_KEYS,
-    SF1_ROW_COUNTS,
     TABLE_ORDER,
     TPCH_SCHEMAS,
+    row_counts_for_scale,
     schema_contract,
     schema_sha256,
 )
-from data.tpch.source import DBGEN_BUILD_COMMAND, DBGEN_GENERATE_COMMAND, sha256_file
+from data.tpch.source import DBGEN_BUILD_COMMAND, dbgen_generate_command, sha256_file
 
 CONVERTER_NAME = "data.tpch"
 CONVERTER_VERSION = "1.0.2"
@@ -561,13 +561,19 @@ def _validate_parquet_tables(
                 ):
                     raise TpchContractError("lineitem ship date is after receipt date")
                 count += batch.num_rows
+            # Bound the SF10 fact-table FK working set to one physical file.
+            # Parent PKs and the cross-file primary-key boundary remain intact.
+            if table_name == "lineitem":
+                _validate_foreign_keys(table_name, foreign_key_chunks, parent_keys)
+                foreign_key_chunks = {column: [] for column in foreign_key_columns}
         if count != expected_counts[table_name]:
             raise TpchContractError(
                 f"{table_name} Parquet row count {count} does not match "
                 f"{expected_counts[table_name]}"
             )
         row_counts[table_name] = count
-        _validate_foreign_keys(table_name, foreign_key_chunks, parent_keys)
+        if table_name != "lineitem":
+            _validate_foreign_keys(table_name, foreign_key_chunks, parent_keys)
         foreign_key_checks += count * len(FOREIGN_KEYS[table_name])
         if table_name in referenced_parents:
             parent_keys[table_name] = _arrow_table(primary_key_chunks, PRIMARY_KEYS[table_name])
@@ -586,12 +592,17 @@ def build_dataset_from_tbl(
     generator_git_commit: str,
     generator_python_version: str | None = None,
     generator_python_implementation: str | None = None,
-    expected_counts: Mapping[str, int] = SF1_ROW_COUNTS,
+    scale_factor: int = 1,
+    expected_counts: Mapping[str, int] | None = None,
     benchmark_eligible: bool = True,
     target_file_size_bytes: int = TARGET_FILE_SIZE_BYTES,
     row_group_rows: int = ROW_GROUP_ROWS,
 ) -> DatasetBuildResult:
     """Atomically convert one complete DBGEN directory into immutable Parquet."""
+
+    scale_counts = row_counts_for_scale(scale_factor)
+    if expected_counts is None:
+        expected_counts = scale_counts
 
     if output_dir.exists():
         raise FileExistsError(f"immutable TPC-H output already exists: {output_dir}")
@@ -651,10 +662,10 @@ def build_dataset_from_tbl(
         validation = _validate_parquet_tables(temporary, expected_counts)
         manifest: dict[str, Any] = {
             "schema_version": 1,
-            "dataset_id": f"tpch-derived-sf1-{source_provenance['commit'][:12]}-v1",
+            "dataset_id": f"tpch-derived-sf{scale_factor}-{source_provenance['commit'][:12]}-v1",
             "notice": NOTICE,
-            "scale_profile": "sf1",
-            "scale_factor": 1,
+            "scale_profile": f"sf{scale_factor}",
+            "scale_factor": scale_factor,
             "benchmark_eligible": benchmark_eligible,
             "generator": {
                 "name": f"tpch-dbgen+{CONVERTER_NAME}",
@@ -667,7 +678,7 @@ def build_dataset_from_tbl(
             "source": dict(source_provenance),
             "generation": {
                 "build_command": list(DBGEN_BUILD_COMMAND),
-                "dbgen_command": list(DBGEN_GENERATE_COMMAND),
+                "dbgen_command": list(dbgen_generate_command(scale_factor)),
                 "locale": "C",
                 "timezone": "UTC",
                 "source_tbl_format": dict(SOURCE_TBL_FORMAT),
@@ -721,7 +732,7 @@ def _safe_manifest_file(dataset_root: Path, relative_path: object) -> Path:
 def validate_tpch_dataset(
     dataset_root: Path,
     *,
-    expected_counts: Mapping[str, int] = SF1_ROW_COUNTS,
+    expected_counts: Mapping[str, int] | None = None,
     expected_source: Mapping[str, str] | None = None,
     expected_python_version: str | None = None,
     require_benchmark_eligible: bool = True,
@@ -736,8 +747,16 @@ def validate_tpch_dataset(
     declared_hash = manifest.get("manifest_sha256")
     if not isinstance(declared_hash, str) or declared_hash != _manifest_hash(manifest):
         raise TpchContractError("TPC-H manifest self-hash is invalid")
-    if manifest.get("schema_version") != 1 or manifest.get("scale_factor") != 1:
-        raise TpchContractError("TPC-H manifest is not the reviewed SF1 contract")
+    scale_factor = manifest.get("scale_factor")
+    if (
+        manifest.get("schema_version") != 1
+        or type(scale_factor) is not int
+        or scale_factor not in (1, 10)
+        or manifest.get("scale_profile") != f"sf{scale_factor}"
+    ):
+        raise TpchContractError("TPC-H manifest is not the reviewed SF1/SF10 contract")
+    if expected_counts is None:
+        expected_counts = row_counts_for_scale(scale_factor)
     if manifest.get("notice") != NOTICE:
         raise TpchContractError("TPC-H derived/non-audited notice is missing")
     if require_benchmark_eligible and manifest.get("benchmark_eligible") is not True:
@@ -767,7 +786,7 @@ def validate_tpch_dataset(
         raise TpchContractError("TPC-H generator Python differs from runtime lock")
     expected_generation = {
         "build_command": list(DBGEN_BUILD_COMMAND),
-        "dbgen_command": list(DBGEN_GENERATE_COMMAND),
+        "dbgen_command": list(dbgen_generate_command(scale_factor)),
         "locale": "C",
         "timezone": "UTC",
         "source_tbl_format": dict(SOURCE_TBL_FORMAT),

@@ -172,6 +172,8 @@ def test_every_core_workload_has_an_executable_laptop_config() -> None:
     for config_path in sorted(CONFIG_ROOT.glob("benchmark-laptop-*.yaml")):
         config = load_experiment(config_path, EXPERIMENT_SCHEMA_ROOT)
         validate_runtime_profile(config, ROOT)
+        if config["workload"].get("scale_factor") == 10:
+            continue
         query_id = config["workload"]["query_id"]
         assert query_id not in configs
         configs[query_id] = config
@@ -191,3 +193,24 @@ def test_every_core_workload_has_an_executable_laptop_config() -> None:
         )
 
     assert set(configs) == CORE_IDS | TPCH_CORE_IDS
+
+
+def test_sf10_configs_preserve_sf1_queries_and_runtime_with_separate_identity() -> None:
+    configs = sorted(CONFIG_ROOT.glob("benchmark-laptop-tpch-sf10-*.yaml"))
+    assert len(configs) == 4
+    for path in configs:
+        config = load_experiment(path, EXPERIMENT_SCHEMA_ROOT)
+        validate_runtime_profile(config, ROOT)
+        baseline = load_experiment(
+            path.with_name(path.name.replace("sf10-", "")), EXPERIMENT_SCHEMA_ROOT
+        )
+        assert config["spark"] == baseline["spark"]
+        assert config["matrix"] == baseline["matrix"]
+        assert config["workload"]["parameters"] == baseline["workload"]["parameters"]
+        assert config["workload"]["scale_factor"] == 10
+        assert "sf10-v1" in config["workload"]["dataset_manifest"]
+        assert config["experiment"]["id"] == baseline["experiment"]["id"].replace("SF1", "SF10")
+        assert config["experiment"]["measurement_runs"] >= 5
+        assert config["experiment"]["warmup_runs"] == baseline["experiment"]["warmup_runs"]
+        assert "exploratory" in config["experiment"]["labels"]
+        assert "primary" not in config["experiment"]["labels"]

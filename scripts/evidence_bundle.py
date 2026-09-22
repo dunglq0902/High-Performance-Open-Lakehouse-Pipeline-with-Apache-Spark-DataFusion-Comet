@@ -2007,6 +2007,7 @@ def _directory_inventory_from_bundle(
     empty_directories: set[str],
 ) -> tuple[list[str], list[str]]:
     prefix = f"{archive_root}/"
+
     def path_order(value: str) -> tuple[str, ...]:
         return PurePosixPath(value).parts
 

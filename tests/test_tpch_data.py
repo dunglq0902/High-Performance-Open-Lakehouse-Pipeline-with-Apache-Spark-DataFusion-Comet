@@ -88,6 +88,47 @@ def test_locked_tpch_source_and_sf1_contract_are_explicit() -> None:
     assert SF1_ROW_COUNTS["lineitem"] == 6_001_215
 
 
+def test_sf10_contract_has_exact_cardinalities_and_generation_command() -> None:
+    from data.tpch.contract import row_counts_for_scale
+    from data.tpch.source import dbgen_generate_command
+
+    counts = row_counts_for_scale(10)
+    assert counts["lineitem"] == 59_986_052
+    assert counts["orders"] == 15_000_000
+    assert counts["nation"] == 25
+    assert counts["region"] == 5
+    assert dbgen_generate_command(10) == ("./dbgen", "-f", "-s", "10")
+    for invalid in (0, 100, True):
+        with pytest.raises(ValueError, match="1 or 10"):
+            row_counts_for_scale(invalid)
+
+
+def test_sf10_manifest_binds_scale_command_and_exact_counts(tmp_path: Path) -> None:
+    source_dir = tmp_path / "source"
+    counts = _tiny_tbl_source(source_dir)
+    output = tmp_path / "dataset"
+    result = build_dataset_from_tbl(
+        source_dir,
+        output,
+        source_provenance=SOURCE,
+        generator_git_commit=COMMIT,
+        scale_factor=10,
+        expected_counts=counts,
+    )
+    assert result.manifest["scale_factor"] == 10
+    assert result.manifest["scale_profile"] == "sf10"
+    assert "sf10" in result.manifest["dataset_id"]
+    assert validate_tpch_dataset(output, expected_counts=counts).row_counts == counts
+    # An explicit tiny fixture cannot pass full-scale research validation.
+    with pytest.raises(TpchContractError, match="row count"):
+        validate_tpch_dataset(output)
+    result.manifest["generation"]["dbgen_command"][-1] = "1"
+    result.manifest["manifest_sha256"] = _manifest_hash(result.manifest)
+    result.manifest_path.write_text(json.dumps(result.manifest), encoding="utf-8")
+    with pytest.raises(TpchContractError, match="generation metadata"):
+        validate_tpch_dataset(output, expected_counts=counts)
+
+
 def test_tiny_tpch_conversion_is_atomic_hash_bound_and_revalidates(tmp_path: Path) -> None:
     source_dir = tmp_path / "source"
     expected_counts = _tiny_tbl_source(source_dir)
