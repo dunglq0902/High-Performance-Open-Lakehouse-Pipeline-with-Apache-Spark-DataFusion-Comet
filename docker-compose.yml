@@ -116,6 +116,7 @@ services:
     <<: *spark-common
     cpus: "2.0"
     mem_limit: 5g
+    memswap_limit: 5g
     entrypoint: ["/opt/spark/bin/spark-class"]
     command:
       - org.apache.spark.deploy.worker.Worker
@@ -141,6 +142,7 @@ services:
     <<: *spark-common
     cpus: "2.0"
     mem_limit: 5g
+    memswap_limit: 5g
     profiles: [tools]
     entrypoint: ["/bin/bash"]
     stdin_open: true

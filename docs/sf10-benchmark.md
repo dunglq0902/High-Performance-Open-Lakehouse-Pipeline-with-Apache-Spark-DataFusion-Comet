@@ -1,6 +1,6 @@
 # Exploratory TPC-H-derived SF10
 
-Run Q01, Q03, Q06 and Q12 with two warm-up pairs and five measured pairs,
+Run Q01, Q03, Q06 and Q12 with five measured pairs and two untimed warmups in each measurement application,
 the same fixed laptop Spark/Comet allocation as SF1, and the `exploratory`
 and `non-audited` labels. Each campaign has its own `EXP-TPCH-SF10-*`
 identity. SF10 results are separate from the primary ten-campaign SF1 report.
@@ -36,3 +36,9 @@ Both final-output and scratch capacity are checked before generation.
 Resume by repeating the same suite command from the same commit and image.
 Do not regenerate or overwrite existing raw results. A failed capacity or
 correctness gate is a stopped campaign, never a successful measurement.
+
+Spark driver and worker containers set memory-plus-swap limits equal to their
+5 GiB memory limits, so their cgroups cannot use swap. CPU and Spark heap/off-heap
+allocations remain unchanged. The zero-swap collector gate remains mandatory.
+A prior run that observed swap is preserved as diagnostic evidence and excluded
+from accepted measurements; rerun the suite from a clean, committed checkout.
