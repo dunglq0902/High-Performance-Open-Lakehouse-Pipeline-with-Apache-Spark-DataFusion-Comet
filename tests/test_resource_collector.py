@@ -56,6 +56,32 @@ def test_cgroup_parsers_preserve_observed_zero_and_sum_devices() -> None:
     )
 
 
+def test_io_stat_accepts_kernel_device_only_zero_rows() -> None:
+    assert parse_io_stat("8:0 \n8:16\t\n") == (0, 0)
+    assert parse_io_stat("8:0 rbytes=10 wbytes=20 rios=1\n8:16 \n8:32 rbytes=0 wbytes=5\n") == (
+        10,
+        25,
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "device:\n",
+        ":0\n",
+        "-1:0\n",
+        "8:0 rbytes=1\n",
+        "8:0 wbytes=2\n",
+        "8:0 rios=1\n",
+        "8:0 rbytes=-1 wbytes=0\n",
+        "8:0 rbytes=1 wbytes=bad\n",
+    ],
+)
+def test_io_stat_does_not_turn_malformed_or_partial_rows_into_zero(text: str) -> None:
+    with pytest.raises(ValueError):
+        parse_io_stat(text)
+
+
 def test_cgroup_source_captures_complete_sample() -> None:
     reader = FakeReader(
         {
@@ -64,7 +90,7 @@ def test_cgroup_source_captures_complete_sample() -> None:
             "/cg/memory.current": "4096\n",
             "/cg/memory.peak": "8192\n",
             "/cg/memory.swap.current": "0\n",
-            "/cg/io.stat": "8:0 rbytes=100 wbytes=200\n8:16 rbytes=25 wbytes=50\n",
+            "/cg/io.stat": "8:0 rbytes=100 wbytes=200\n8:16 rbytes=25 wbytes=50\n8:32 \n",
         }
     )
     source = CgroupV2Source(Path("/cg"), reader=reader, clock_ns=lambda: 987_654)

@@ -42,3 +42,10 @@ Spark driver and worker containers set memory-plus-swap limits equal to their
 allocations remain unchanged. The zero-swap collector gate remains mandatory.
 A prior run that observed swap is preserved as diagnostic evidence and excluded
 from accepted measurements; rerun the suite from a clean, committed checkout.
+
+The I/O collector accepts a cgroup `io.stat` line containing only a valid device
+number as an observed zero. The WSL kernel omits standard counters when that
+device has no read/write bytes or operations; see
+[`blkcg_print_one_stat`](https://github.com/microsoft/WSL2-Linux-Kernel/blob/linux-msft-wsl-6.18.y/block/blk-cgroup.c).
+Malformed device identifiers, partially populated counter rows, unreadable files,
+and counter resets still fail the resource-evidence gate.

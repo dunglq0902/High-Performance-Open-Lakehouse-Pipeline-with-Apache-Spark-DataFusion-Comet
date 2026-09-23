@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import threading
 import time
 from collections.abc import Callable, Iterable, Sequence
@@ -267,8 +268,13 @@ def parse_io_stat(text: str) -> tuple[int, int]:
         parts = line.split()
         if not parts:
             continue
-        if ":" not in parts[0]:
+        if re.fullmatch(r"[0-9]+:[0-9]+", parts[0]) is None:
             raise ValueError("io.stat device field is malformed")
+        # Linux blkcg_print_one_stat omits all standard counters when read/write
+        # bytes and operations are zero, leaving a device-only line. This is an
+        # observed zero, unlike a missing file or a partially populated row.
+        if len(parts) == 1:
+            continue
         values: dict[str, int] = {}
         for item in parts[1:]:
             key, separator, raw_value = item.partition("=")
@@ -276,7 +282,7 @@ def parse_io_stat(text: str) -> tuple[int, int]:
                 raise ValueError("io.stat counter is malformed")
             values[key] = _parse_non_negative_integer(raw_value)
         if "rbytes" not in values or "wbytes" not in values:
-            raise ValueError("io.stat row has no rbytes/wbytes counters")
+            raise ValueError(f"io.stat row has no rbytes/wbytes counters: {line!r}")
         read_bytes += values["rbytes"]
         write_bytes += values["wbytes"]
     return read_bytes, write_bytes
