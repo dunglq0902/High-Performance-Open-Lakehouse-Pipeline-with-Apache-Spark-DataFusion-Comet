@@ -1,0 +1,92 @@
+schema_version: 1
+
+experiment:
+  id: EXP-TPCH-SF10-R2-Q06
+  name: Q06 TPC-H-derived SF10 laptop comparison round 2
+  description: Paired Spark versus Comet revenue-filter comparison on TPC-H-derived SF10 data
+  seed: 20260923
+  measurement_runs: 10
+  warmup_runs: 2
+  timeout_seconds: 1800
+  schedule: paired_randomized
+  labels:
+    - exploratory
+    - laptop
+    - warm-storage-cache
+    - tpch-derived
+    - non-audited
+
+workload:
+  suite: tpch
+  scale_factor: 10
+  query_id: Q06
+  storage_profile: tpch_iceberg
+  data_path: lakehouse.tpch
+  dataset_manifest: data/generated/tpch-derived-sf10-v1/manifest.json
+  sql_file: workloads/tpch/Q06_forecast_revenue_change.sql
+  manifest_file: workloads/manifests/tpch/Q06_forecast_revenue_change.yaml
+  result_mode: collect
+  parameters:
+    ship_date_start: "1994-01-01"
+    ship_date_end: "1995-01-01"
+    discount_lower: 0.05
+    discount_upper: 0.07
+    quantity_upper: 24
+    result_limit: 1
+
+spark:
+  runtime_profile: benchmark-laptop
+  common_conf:
+    spark.master: spark://spark-master:7077
+    spark.executor.instances: 1
+    spark.executor.cores: 2
+    spark.executor.memory: 2g
+    spark.executor.memoryOverhead: 1g
+    spark.driver.memory: 1g
+    spark.memory.offHeap.enabled: true
+    spark.memory.offHeap.size: 1g
+    spark.sql.shuffle.partitions: 16
+    spark.sql.adaptive.enabled: true
+    spark.sql.ansi.enabled: true
+    spark.sql.session.timeZone: UTC
+    spark.sql.parquet.compression.codec: snappy
+    spark.speculation: false
+    spark.eventLog.enabled: true
+    spark.eventLog.compress: false
+    spark.eventLog.dir: file:///opt/lakehouse/.artifacts/spark-events
+    spark.local.dir: /opt/lakehouse/.runtime/spark-local
+    spark.sql.extensions: org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+    spark.sql.catalog.lakehouse: org.apache.iceberg.spark.SparkCatalog
+    spark.sql.catalog.lakehouse.type: rest
+    spark.sql.catalog.lakehouse.uri: http://iceberg-rest:8181
+    spark.sql.catalog.lakehouse.warehouse: s3://lakehouse/warehouse
+    spark.sql.catalog.lakehouse.io-impl: org.apache.iceberg.aws.s3.S3FileIO
+    spark.sql.catalog.lakehouse.s3.endpoint: http://minio:9000
+    spark.sql.catalog.lakehouse.s3.path-style-access: true
+    spark.sql.catalog.lakehouse.s3.region: us-east-1
+    spark.sql.catalog.lakehouse.client.region: us-east-1
+
+matrix:
+  engines:
+    - name: spark_baseline
+      spark_conf: {}
+    - name: comet_accelerated
+      spark_conf:
+        spark.plugins: org.apache.spark.CometPlugin
+        spark.shuffle.manager: org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager
+        spark.comet.enabled: true
+        spark.comet.exec.enabled: true
+        spark.comet.nativeLoadRequired: true
+        spark.comet.shuffle.enabled: true
+        spark.comet.exec.memoryPool: fair_unified
+        spark.comet.exec.memoryPool.fraction: "0.90"
+        spark.comet.exec.strictFloatingPoint: true
+        spark.comet.scan.icebergNative.enabled: true
+        spark.comet.explain.fallback.enabled: true
+        spark.comet.explain.format: verbose
+        spark.comet.parquet.write.enabled: false
+        spark.comet.metrics.enabled: false
+
+capacity:
+  estimated_largest_shuffle_bytes: 2684354560
+  safety_margin_ratio: 0.5

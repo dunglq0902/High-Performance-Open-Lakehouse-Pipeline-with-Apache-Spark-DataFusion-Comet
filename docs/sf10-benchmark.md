@@ -49,3 +49,30 @@ device has no read/write bytes or operations; see
 [`blkcg_print_one_stat`](https://github.com/microsoft/WSL2-Linux-Kernel/blob/linux-msft-wsl-6.18.y/block/blk-cgroup.c).
 Malformed device identifiers, partially populated counter rows, unreadable files,
 and counter resets still fail the resource-evidence gate.
+
+## Second round with ten measured pairs
+
+The independent second round uses `EXP-TPCH-SF10-R2-*` identities, ten measured
+pairs per query, and schedule seed `20260923`. It retains the same dataset,
+queries, two untimed warmups per measurement application, runtime settings,
+resource allocation, and admission gates. There are 24 runs per query and 96
+runs in total, including 80 measured runs. Keep its results separate from the
+completed five-pair round; do not pool the two rounds into one campaign.
+
+Use the existing validated SF10 dataset and a separate Compose project so the
+first round's Iceberg catalog and object storage remain available:
+
+```bash
+export COMPOSE_PROJECT_NAME=lakehouse-comet-sf10-r2
+uv run python scripts/run_research_suite.py \
+  --config benchmark/configs/benchmark-laptop-tpch-sf10-r2-q03.yaml \
+  --config benchmark/configs/benchmark-laptop-tpch-sf10-r2-q06.yaml \
+  --config benchmark/configs/benchmark-laptop-tpch-sf10-r2-q12.yaml \
+  --config benchmark/configs/benchmark-laptop-tpch-sf10-r2-q01.yaml
+```
+
+Summarize each `results/raw/EXP-TPCH-SF10-R2-*` directory separately. On WSL,
+pass an absolute output path, such as
+`--output "$PWD/results/reports/sf10-r2-Q03-summary.json"`, to avoid shared
+filesystem rename errors between relative and absolute paths. Resume with
+the same query order, committed checkout, and admitted image.
