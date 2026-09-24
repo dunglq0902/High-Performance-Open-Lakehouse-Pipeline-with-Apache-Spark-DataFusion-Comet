@@ -136,9 +136,7 @@ def test_experiment_schema_accepts_laptop_runtime_profile(tmp_path: Path) -> Non
 
 
 def test_laptop_runtime_profile_matches_reviewed_property_files() -> None:
-    config = yaml.safe_load(SMOKE_CONFIG.read_text(encoding="utf-8"))
-    config["spark"]["runtime_profile"] = "benchmark-laptop"
-    config["spark"]["common_conf"]["spark.sql.shuffle.partitions"] = 16
+    config = load_document(ROOT / ECOMMERCE_CORE_CONFIGS[0], EXPERIMENT_SCHEMA)
 
     validate_runtime_profile(config, ROOT)
 
