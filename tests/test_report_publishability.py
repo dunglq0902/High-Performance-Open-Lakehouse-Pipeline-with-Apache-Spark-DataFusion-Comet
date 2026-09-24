@@ -10,7 +10,6 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
-from uuid import uuid4
 
 import pyarrow as pa  # type: ignore[import-untyped]
 import pytest
@@ -55,6 +54,8 @@ from benchmark.runner.evidence import (
 from benchmark.runner.record import RawRecordContext, build_raw_record
 from benchmark.runner.runtime import validate_runtime_lock
 from benchmark.runner.sql import schema_hash
+from data.generator.schemas import TABLE_SCHEMAS
+from data.tpch.contract import TPCH_SCHEMAS
 from pipeline.benchmark.run_query import _table_identifier
 from scripts.run_research_suite import CORE_CONFIGS
 
@@ -974,23 +975,94 @@ def _current_hashes(experiment: publishability.CoreExperiment) -> dict[str, str]
     return copy.deepcopy(value)
 
 
+def _isolated_policy_repository(source: Path, destination: Path) -> None:
+    """Policy fixtures need metadata, never the user's generated benchmark datasets.
+
+    Full Parquet/attestation semantics are exercised by test_dataset_attestation.py.
+    These synthetic inventories stay inside pytest's private repository and are
+    never written into the working checkout or admitted as benchmark evidence.
+    """
+    for relative in (
+        "benchmark/configs",
+        "benchmark/schemas",
+        "infrastructure/spark",
+        "workloads",
+    ):
+        shutil.copytree(source / relative, destination / relative)
+    for relative in (
+        "runtime-versions.lock",
+        "uv.lock",
+        "benchmark/collectors/resources.py",
+        "scripts/calibrate_resource_collector.py",
+    ):
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source / relative, target)
+    for config_relative in CORE_CONFIGS:
+        config = load_experiment(destination / config_relative, destination / "benchmark/schemas")
+        workload = config["workload"]
+        path = destination / workload["dataset_manifest"]
+        if path.exists():
+            continue
+        tpch = workload["suite"] == "tpch"
+        schemas = TPCH_SCHEMAS if tpch else TABLE_SCHEMAS
+        size = 9 * 1024**2
+        _write_json(
+            path,
+            {
+                "dataset_id": f"synthetic-policy-{'tpch' if tpch else 'ecommerce'}",
+                "benchmark_eligible": True,
+                "scale_factor": 1,
+                "scale_profile": "sf1" if tpch else "small",
+                "profile": {"profile_id": "small", "benchmark_eligible": True},
+                "generator": {
+                    "name": "synthetic-policy-fixture",
+                    "version": "1.0.0",
+                    "git_commit": TEST_COMMIT,
+                    "worktree_dirty": False,
+                },
+                "validation": {"invalid_rows": 0},
+                "tables": {
+                    name: {
+                        "row_count": 100,
+                        "file_count": 1,
+                        "total_bytes": size,
+                        "files": [
+                            {
+                                "path": f"{name}/part-00000.parquet",
+                                "row_count": 100,
+                                "size_bytes": size,
+                                "sha256": HASH,
+                            }
+                        ],
+                    }
+                    for name in schemas
+                },
+            },
+        )
+
+
 @pytest.fixture(scope="module")
-def _shared_evidence_tree() -> Iterator[_SharedEvidence]:
+def _shared_evidence_tree(tmp_path_factory: pytest.TempPathFactory) -> Iterator[_SharedEvidence]:
+    global ROOT
     global _TEST_EVIDENCE_ROOT
     global _TEST_STATE
 
-    evidence_root = ROOT / ".artifacts/report-publishability-tests" / uuid4().hex
+    original_root = ROOT
+    private_root = tmp_path_factory.mktemp("report-publishability-repository")
+    _isolated_policy_repository(original_root, private_root)
+    ROOT = private_root
+    evidence_root = ROOT / ".artifacts/report-publishability-tests"
     _TEST_EVIDENCE_ROOT = evidence_root
-    _TEST_STATE = _build_fixture_state(evidence_root)
-    shared = _SharedEvidence(
-        root=evidence_root,
-        state=_TEST_STATE,
-        snapshot=_snapshot_tree(evidence_root),
-    )
     try:
-        yield shared
+        _TEST_STATE = _build_fixture_state(evidence_root)
+        yield _SharedEvidence(
+            root=evidence_root,
+            state=_TEST_STATE,
+            snapshot=_snapshot_tree(evidence_root),
+        )
     finally:
-        shutil.rmtree(evidence_root, ignore_errors=True)
+        ROOT = original_root
         _TEST_EVIDENCE_ROOT = None
         _TEST_STATE = None
 
@@ -1008,6 +1080,7 @@ def _stable_current_repository(
     evidence_root = shared.root
     _TEST_EVIDENCE_ROOT = evidence_root
     _TEST_STATE = shared.state
+    monkeypatch.setattr(publishability, "ROOT", ROOT)
     monkeypatch.setattr(publishability, "CAMPAIGN_CONTROL_ROOT", evidence_root / "campaigns")
     monkeypatch.setattr(
         publishability,
@@ -1284,7 +1357,9 @@ def test_exact_core_suite_is_publishable(tmp_path: Path) -> None:
     campaign_root = tmp_path / "campaigns"
     _write_verifications(campaign_root)
 
-    evidence = assess_report_publishability(_measurement_records(), campaign_root)
+    evidence = assess_report_publishability(
+        _measurement_records(), campaign_root, repository_root=ROOT
+    )
 
     assert len(core_experiments()) == EXPECTED_CORE_CAMPAIGNS == 10
     assert evidence["status"] == "passed", evidence["issues"]
@@ -1328,7 +1403,9 @@ def test_latest_campaign_verification_fails_closed_without_fallback(tmp_path: Pa
     latest = campaign_root / first.experiment_id / "campaign-verification-attempt-0002.json"
     latest.write_text('{"schema_version":', encoding="utf-8")
 
-    evidence = assess_report_publishability(_measurement_records(), campaign_root)
+    evidence = assess_report_publishability(
+        _measurement_records(), campaign_root, repository_root=ROOT
+    )
 
     assert evidence["publishable"] is False
     check = next(
@@ -1350,7 +1427,7 @@ def test_measurement_policy_requires_all_ten_complete_pairs(tmp_path: Path) -> N
         next(index for index, record in enumerate(records) if record["phase"] == "measurement")
     )
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any("measurement record count must equal 20" in issue for issue in evidence["issues"])
@@ -1370,7 +1447,7 @@ def test_missing_correctness_gate_blocks_publication(tmp_path: Path) -> None:
         )
     ]
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any("required gate record is missing" in issue for issue in evidence["issues"])
@@ -1399,7 +1476,7 @@ def test_incomplete_measurement_observability_blocks_publication(
     assert isinstance(payload, dict)
     payload[field] = invalid
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any(expected_issue in issue for issue in evidence["issues"])
@@ -1414,7 +1491,7 @@ def test_resource_metric_exclusion_blocks_publication(tmp_path: Path) -> None:
     assert isinstance(metrics, dict)
     metrics.pop("cpu_core_seconds")
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any(
@@ -1429,7 +1506,7 @@ def test_failed_measurement_blocks_summary_admission(tmp_path: Path) -> None:
     measurement = next(record for record in records if record["phase"] == "measurement")
     measurement["status"] = "failed"
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any("status='succeeded'" in issue for issue in evidence["issues"])
@@ -1446,7 +1523,7 @@ def test_unexpected_measurement_experiment_blocks_exact_core_set(tmp_path: Path)
     unexpected["run_id"] = "unreviewed-measurement"
     records.append(unexpected)
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     exact_set = evidence["checks"]["exact_core_experiment_set"]
@@ -1477,7 +1554,9 @@ def test_verification_rejects_boolean_counters_and_non_boolean_complete(
     report[field] = invalid_value
     path.write_text(json.dumps(verification), encoding="utf-8")
 
-    evidence = assess_report_publishability(_measurement_records(), campaign_root)
+    evidence = assess_report_publishability(
+        _measurement_records(), campaign_root, repository_root=ROOT
+    )
 
     assert evidence["publishable"] is False
     check = next(
@@ -1499,7 +1578,9 @@ def test_latest_valid_attempt_supersedes_failed_base(tmp_path: Path) -> None:
     latest = directory / "campaign-verification-attempt-0002.json"
     latest.write_text(json.dumps(_verification_value(first.experiment_id)), encoding="utf-8")
 
-    evidence = assess_report_publishability(_measurement_records(), campaign_root)
+    evidence = assess_report_publishability(
+        _measurement_records(), campaign_root, repository_root=ROOT
+    )
 
     assert evidence["publishable"] is True
     check = next(
@@ -1521,7 +1602,7 @@ def test_verification_must_bind_physical_artifact_hashes(tmp_path: Path) -> None
     verification["report"]["artifact_files_sha256"] = "0" * 64
     path.write_text(json.dumps(verification), encoding="utf-8")
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any("does not bind campaign artifacts" in issue for issue in evidence["issues"])
@@ -1544,7 +1625,7 @@ def test_experiment_manifest_must_bind_current_core_config(tmp_path: Path) -> No
     verification["report"]["experiment_manifest_sha256"] = manifest["manifest_sha256"]
     verification_path.write_text(json.dumps(verification), encoding="utf-8")
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any(
@@ -1581,7 +1662,7 @@ def test_experiment_manifest_must_bind_every_current_input(tmp_path: Path, field
     verification["report"]["experiment_manifest_sha256"] = manifest["manifest_sha256"]
     verification_path.write_text(json.dumps(verification), encoding="utf-8")
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any(f"does not bind current {field}" in issue for issue in evidence["issues"])
@@ -1604,7 +1685,7 @@ def test_experiment_manifest_rejects_unexpected_input_hash(tmp_path: Path) -> No
     verification["report"]["experiment_manifest_sha256"] = manifest["manifest_sha256"]
     verification_path.write_text(json.dumps(verification), encoding="utf-8")
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any("unexpected input hashes" in issue for issue in evidence["issues"])
@@ -1618,7 +1699,7 @@ def test_raw_git_commit_must_equal_current_clean_head(tmp_path: Path) -> None:
     assert isinstance(provenance, dict)
     provenance["git_commit"] = "c" * 40
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     check = evidence["checks"]["repository_provenance"]
@@ -1638,7 +1719,7 @@ def test_dirty_repository_blocks_publication(
 
     monkeypatch.setattr(publishability, "clean_git_commit", fail_dirty)
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     check = evidence["checks"]["repository_provenance"]
@@ -1663,7 +1744,7 @@ def test_control_artifact_tampering_blocks_publication(
     preserve_evidence_paths(medallion)
     medallion.write_text('{"status":"failed"}', encoding="utf-8")
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any("control artifacts" in issue or "Medallion" in issue for issue in evidence["issues"])
@@ -1686,7 +1767,7 @@ def test_rehashed_physical_plan_tampering_blocks_publication(
         physical_experiments=frozenset({str(record["experiment_id"])}),
     )
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any(
@@ -1717,7 +1798,7 @@ def test_rehashed_event_metric_tampering_blocks_publication(
         physical_experiments=frozenset({str(record["experiment_id"])}),
     )
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any(
@@ -1745,7 +1826,7 @@ def test_rehashed_resource_summary_tampering_blocks_publication(
         physical_experiments=frozenset({str(record["experiment_id"])}),
     )
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any(
@@ -1772,7 +1853,7 @@ def test_rehashed_application_result_tampering_blocks_publication(
         physical_experiments=frozenset({str(record["experiment_id"])}),
     )
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any(
@@ -1801,7 +1882,7 @@ def test_rehashed_attempt_admission_tampering_blocks_publication(
         physical_experiments=frozenset({str(record["experiment_id"])}),
     )
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any("admission run identity differs" in issue for issue in evidence["issues"])
@@ -1825,7 +1906,7 @@ def test_dataset_attestation_tampering_blocks_publication(
     payload["dataset"]["content_identity_sha256"] = "0" * 64
     attestation.write_text(json.dumps(payload), encoding="utf-8")
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is False
     assert any("attestation" in issue for issue in evidence["issues"])
@@ -1876,7 +1957,7 @@ def test_visible_transient_retry_evidence_remains_publishable(
         physical_experiments=frozenset({first.experiment_id}),
     )
 
-    evidence = assess_report_publishability(records, campaign_root)
+    evidence = assess_report_publishability(records, campaign_root, repository_root=ROOT)
 
     assert evidence["publishable"] is True
     check = next(
