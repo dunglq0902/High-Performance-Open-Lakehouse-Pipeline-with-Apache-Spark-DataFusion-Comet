@@ -57,7 +57,7 @@ _HISTORY_SERVER_URL = "http://127.0.0.1:18080"
 _REPORT_INVENTORY_CANONICALIZATION = "json-sort-keys-compact-utf8-v1"
 _DEMO_ENGINES = ("spark_baseline", "comet_accelerated")
 _PRESENTATION_VISUAL_REVIEW_SCOPE = (
-    "All 12 rendered slides were inspected for clipping, overlap, legibility, chart/table "
+    "All 13 rendered slides were inspected for clipping, overlap, legibility, chart/table "
     "rendering, and the correct publication or diagnostic label."
 )
 

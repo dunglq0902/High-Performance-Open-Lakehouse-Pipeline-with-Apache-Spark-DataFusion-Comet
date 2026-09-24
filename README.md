@@ -27,6 +27,12 @@ Mục tiêu cốt lõi của đề tài là đánh giá định lượng và gi�
 
 ## Tài liệu Đặc tả Dự án Toàn diện
 
+**Kết quả cập nhật 24/09/2026:** đã hoàn tất SF10 vòng 2, 10 cặp đo cho mỗi Q01/Q03/Q06/Q12.
+Comet đạt paired speedup lần lượt **4,51× / 0,99× / 1,46× / 1,64×**; Q03 chưa có khác biệt
+chắc chắn vì CI 95% chứa 1×. Xem [báo cáo nghiên cứu có SF10](docs/research-report.md) và
+[slide cập nhật](deliverables/presentation/lakehouse-comet-research-sf10-20260924.pptx).
+SF10 là phần mở rộng thăm dò, được báo cáo riêng với ma trận chính SF1. Video demo giữ nguyên.
+
 Toàn bộ kế hoạch nghiên cứu, cơ sở lý thuyết học thuật, thiết kế pipeline Medallion, ma trận thực nghiệm 3 tầng và lộ trình 8 tuần đã được đặc tả chi tiết tại:
 
 **[Xem Bản Đặc tả Đề tài Chi tiết (Project Specification)](docs/project_specification.md)**

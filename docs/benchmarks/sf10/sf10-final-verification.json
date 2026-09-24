@@ -1,0 +1,39 @@
+{
+  "status": "passed",
+  "checked_at": "2026-09-23T15:20:07.771484+00:00",
+  "git_commit": "412e949e76de838d58385ccc135dce579be94df9",
+  "container_image_digest": "sha256:dc61f4c81cb25d06e99e2f4c4a556cad94acb106d56537c61f8a6b3de0104b2b",
+  "campaigns": [
+    {
+      "query": "Q01",
+      "records": 14,
+      "raw_digest_verified": true,
+      "artifacts_digest_verified": true,
+      "control_digest_verified": true
+    },
+    {
+      "query": "Q03",
+      "records": 14,
+      "raw_digest_verified": true,
+      "artifacts_digest_verified": true,
+      "control_digest_verified": true
+    },
+    {
+      "query": "Q06",
+      "records": 14,
+      "raw_digest_verified": true,
+      "artifacts_digest_verified": true,
+      "control_digest_verified": true
+    },
+    {
+      "query": "Q12",
+      "records": 14,
+      "raw_digest_verified": true,
+      "artifacts_digest_verified": true,
+      "control_digest_verified": true
+    }
+  ],
+  "complete_zero_swap_resource_windows": 112,
+  "resource_samples": 14187,
+  "summary_sha256": "3c64cca76b314883befa97f2af5eac6d20a7b98e9d220eece235d9838cd0bbdd"
+}

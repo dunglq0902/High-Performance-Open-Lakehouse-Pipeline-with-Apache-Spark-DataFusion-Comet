@@ -22,7 +22,7 @@ def _write_pptx(
     path: Path,
     *,
     diagnostic: bool = False,
-    slide_count: int = 12,
+    slide_count: int = 13,
     chart_count: int = 7,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -34,7 +34,7 @@ def _write_pptx(
         archive.writestr("ppt/presentation.xml", presentation)
         for index in range(1, slide_count + 1):
             marker = "BẢN CHẨN ĐOÁN" if diagnostic and index > 1 else ""
-            table = "<a:tbl/>" if index in {3, 11} else ""
+            table = "<a:tbl/>" if index in {3, 11, 12} else ""
             chart = (
                 f'<c:chart xmlns:c="{C_NS}" xmlns:r="{R_NS}" r:id="rIdChart"/>'
                 if index <= chart_count
@@ -138,10 +138,10 @@ def test_finalizes_publishable_deck_and_is_idempotent(tmp_path: Path) -> None:
     assert manifest["status"] == "publishable"
     assert manifest["git_commit"] == COMMIT
     assert manifest["visual_review"]["confirmed"] is True
-    assert manifest["presentation"]["slide_count"] == 12
+    assert manifest["presentation"]["slide_count"] == 13
     assert manifest["presentation"]["native_chart_count"] == 7
-    assert manifest["presentation"]["native_table_slide_count"] == 2
-    assert manifest["presentation"]["notes_slide_count"] == 12
+    assert manifest["presentation"]["native_table_slide_count"] == 3
+    assert manifest["presentation"]["notes_slide_count"] == 13
     assert manifest["presentation"]["sha256"] == hashlib.sha256(deck.read_bytes()).hexdigest()
     inventory_value = json.loads(inventory.read_text(encoding="utf-8"))
     canonical_entries = json.dumps(
@@ -248,7 +248,7 @@ def test_finalizes_visibly_marked_diagnostic_deck_only_when_allowed(tmp_path: Pa
     )
     manifest = json.loads(output.read_text(encoding="utf-8"))
     assert manifest["status"] == "diagnostic"
-    assert manifest["presentation"]["diagnostic_marker_slide_count"] == 11
+    assert manifest["presentation"]["diagnostic_marker_slide_count"] == 12
 
 
 def test_rejects_diagnostic_markers_from_publishable_deck(tmp_path: Path) -> None:
@@ -360,7 +360,7 @@ def test_rejects_unsafe_report_inventory_path(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("slides", "charts", "message"),
-    ((11, 7, "exactly 12 slides"), (12, 6, "at least seven native charts")),
+    ((12, 7, "exactly 13 slides"), (13, 6, "at least seven native charts")),
 )
 def test_rejects_incomplete_deck_contract(
     tmp_path: Path,
@@ -384,7 +384,7 @@ def test_rejects_incomplete_deck_contract(
 
 @pytest.mark.parametrize(
     "orphan_member",
-    ("ppt/charts/chart8.xml", "ppt/notesSlides/notesSlide13.xml"),
+    ("ppt/charts/chart8.xml", "ppt/notesSlides/notesSlide14.xml"),
 )
 def test_rejects_orphan_chart_or_notes_parts(tmp_path: Path, orphan_member: str) -> None:
     deck = tmp_path / "deliverables/presentation/final.pptx"

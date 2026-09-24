@@ -28,7 +28,7 @@ Nếu luôn chạy Spark trước rồi Comet sau, engine chạy sau có thể h
 
 ### 6. Mỗi workload có bao nhiêu lần chạy và vì sao báo cáo ghi 24 attempts?
 
-Mỗi engine có 2 warm-up và 10 measurement, nên một campaign có 12 lần cho Spark và 12 lần cho Comet, tổng cộng 24 execution attempts. Chỉ 10 cặp measurement được đưa vào thống kê; warm-up không được trộn vào kết quả. Cả 10 campaign đều có 0 failed attempt và 0 measurement failure.
+Trong ma trận chính, mỗi engine có 2 warm-up và 10 measurement, tổng cộng 24 record/campaign. SF10 vòng 2 cũng có 24 record/campaign nhưng gồm 20 measurement và 4 record correctness/plan; mỗi application đo còn có 2 warm-up không tính giờ bên trong. Vòng 2 có 96 record thành công và 80 measurement. Ba lần launcher Q01 lỗi trước khi truy vấn chạy được lưu riêng, không nằm trong 96 record này.
 
 ### 7. Vì sao chỉ dùng 10 cặp đo, liệu có quá ít không?
 
@@ -48,13 +48,13 @@ Mỗi workload phải qua Spark–Comet correctness gate trước khi mẫu đư
 
 ### 11. Làm sao biết không có lỗi bị loại bỏ có chọn lọc?
 
-Measurement failures và execution-attempt failures là hai trường riêng trong báo cáo. Attempt lỗi phải có record và log bất biến; runner không được âm thầm bỏ qua. Trong bộ bằng chứng hiện tại, cả hai con số đều bằng 0 trên toàn bộ 10 campaign.
+Measurement failures và execution-attempt failures là hai trường riêng trong báo cáo. Attempt lỗi phải có record và log bất biến; runner không được âm thầm bỏ qua. Trong ma trận chính, cả hai con số đều bằng 0 trên 10 campaign. SF10 vòng 2 có thêm ba lần launcher Q01 thất bại trước khi truy vấn chạy do thư mục chia sẻ sau khi WSL khởi động lại. Archive giữ đủ log và mã băm của các lần lỗi, với 0 canonical query record. Sau kiểm tra phục hồi, 96 record của vòng 2 đều thành công.
 
 ## C. Diễn giải kết quả
 
 ### 12. Kết quả quan trọng nhất là gì?
 
-Median paired speedup lớn hơn 1 ở cả 10 workload và toàn bộ CI 95% có cận dưới trên 1. Geometric mean của 10 median speedup là 1,508×. Q01 cao nhất 3,509×; M08 thấp nhất 1,115× nhưng CI vẫn hoàn toàn trên 1.
+Ma trận chính có geometric mean 1,508× và 10/10 workload có CI trên 1. SF10 vòng 2 bổ sung Q01 4,51×, Q06 1,46× và Q12 1,64× với CI trên 1. Q03 đạt 0,99×, CI 0,94–1,03×, nên chưa rõ khác biệt. Không cộng SF10 vào geometric mean của ma trận chính và không kết luận Comet luôn nhanh hơn.
 
 ### 13. Vì sao Q01 nhanh hơn đến 3,509×?
 
@@ -82,13 +82,13 @@ Không có drift semantic được quan sát: cả 10 workload đều có initia
 
 ## D. Giới hạn và khả năng khái quát
 
-### 19. Tại sao không có SF10, và như vậy RQ3 đã hoàn thành chưa?
+### 19. Đã có SF10 thì RQ3 đã được trả lời đến đâu?
 
-SF10 là phạm vi tùy chọn và chỉ được chạy khi capacity gate trên laptop đạt. Bộ bằng chứng được chấp nhận hiện chỉ có SF1, nên không có matched query giữa SF1 và SF10. Vì vậy phần scalability của RQ3 được ghi đúng là “not estimable”; đề tài không tuyên bố đã chứng minh khả năng mở rộng theo quy mô dữ liệu.
+Đã hoàn tất SF10 vòng 1 với 5 cặp và vòng 2 độc lập với 10 cặp cho Q01/Q03/Q06/Q12. Có thể đối chiếu mô tả cùng bốn query ID ở SF1 và SF10. Tuy nhiên hai bộ khác commit, image và giao thức warm-up; vòng SF10 mới còn trải qua hai phiên máy. Vì vậy chưa tách được ảnh hưởng riêng của scale hay chứng minh quy luật scalability. Findings tự động của ma trận chính vẫn chỉ mô tả SF1; báo cáo tích hợp cập nhật thêm bằng chứng SF10.
 
 ### 20. Có thể gọi đây là kết quả benchmark TPC-H không?
 
-Không nên. Bốn truy vấn sử dụng dữ liệu và logic TPC-H-derived để tạo workload phân tích có kiểm soát, nhưng quy trình không phải benchmark TPC-H được kiểm toán và không bao phủ đầy đủ chuẩn. Cách diễn đạt đúng là “TPC-H-derived ở SF1”.
+Không nên. Bốn truy vấn sử dụng dữ liệu và logic TPC-H-derived để tạo workload phân tích có kiểm soát, nhưng quy trình không phải benchmark TPC-H được kiểm toán và không bao phủ đầy đủ chuẩn. Cách diễn đạt đúng là “TPC-H-derived ở SF1 và phần mở rộng SF10 thăm dò trên laptop”.
 
 ### 21. Kết quả single-node có áp dụng cho cluster production không?
 
@@ -100,7 +100,7 @@ Chính sách của đề tài chỉ công bố P95 khi mỗi engine có ít nh�
 
 ### 23. Có thể khẳng định Comet luôn nhanh hơn Spark không?
 
-Không. Có thể khẳng định rằng trong 10 workload, dữ liệu, runtime và resource envelope đã khóa, Comet có median paired speedup trên 1 và CI 95% cũng trên 1. Không thể chuyển kết luận đó thành “mọi workload” hoặc “mọi cluster”, vì operator không được hỗ trợ, conversion overhead và cấu hình khác có thể làm kết quả thay đổi.
+Không. Ma trận chính có 10 workload với median paired speedup và CI trên 1, nhưng Q03 ở SF10 vòng 2 chỉ đạt 0,99× với CI chứa 1. Không thể chuyển kết luận đó thành “mọi workload” hoặc “mọi cluster”, vì operator không được hỗ trợ, conversion overhead và cấu hình khác có thể làm kết quả thay đổi.
 
 ## E. Tái lập và hướng phát triển
 
@@ -110,7 +110,29 @@ Repository khóa phiên bản runtime, container image, cấu hình benchmark, S
 
 ### 25. Nếu có thêm thời gian, bạn sẽ làm gì trước?
 
-Ưu tiên một là chạy SF10 sau khi đạt capacity gate để trả lời phần scalability của RQ3. Ưu tiên hai là tăng số cặp lên ít nhất 20 để có thể phân tích P95. Sau đó mở rộng sang nhiều worker và thực hiện ablation theo nhóm operator để phân biệt tác động của native scan, shuffle, aggregation, join và chi phí transition.
+Ưu tiên một là đo lại SF1 và SF10 trên cùng commit, image và giao thức warm-up để cô lập ảnh hưởng của scale. Ưu tiên hai là tăng số cặp lên ít nhất 20 và lặp nhiều phiên máy để phân tích P95 và độ ổn định. Sau đó mở rộng sang nhiều worker và thực hiện ablation theo nhóm operator để phân biệt tác động của native scan, shuffle, aggregation, join và chi phí transition.
+
+## F. So sánh cạnh tranh
+
+### 26. Comet có phải lựa chọn native duy nhất không, và vì sao chưa chọn Gluten + Velox?
+
+Không. Apache Gluten với Velox công bố kết quả TPCH-like 3,34× overall và tối đa 23,45× cho một query, nên đây là một phương án cạnh tranh đáng đánh giá. Tuy nhiên benchmark đó dùng single-node 3 TB, Xeon 8592+ và Spark 3.3.1, khác rõ rệt với Spark 4.1.3, laptop 2 core, ma trận chính SF1/e-commerce và phần mở rộng SF10 của đề tài. Vì vậy không thể xếp hạng hai engine từ các số công khai; lựa chọn production phải dựa trên A/B benchmark cùng dữ liệu, snapshot, resource envelope, correctness gate, p95, chi phí và mức fallback.
+
+## G. Kết quả SF10 và giới hạn
+
+### 27. Q03 có 100% native coverage mà vì sao không nhanh hơn?
+
+Coverage đếm operator, không đo tỷ lệ thời gian thực thi native. Q03 vòng 2 đạt 0,994×, CI 95% [0,939; 1,031], nên chưa thấy khác biệt tốc độ chắc chắn. Dữ liệu này chưa tách chi phí scan, join, shuffle, I/O và warm-up để xác định nguyên nhân. Cần profile hoặc ablation trước khi đưa ra kết luận nhân quả.
+
+### 28. Hai vòng SF10 có được gộp thành 15 cặp mỗi truy vấn không?
+
+Không. Vòng 1 có 5 cặp và vòng 2 có 10 cặp, chạy độc lập ở commit và image khác nhau. Vòng 2 là kết quả SF10 chính của phần cập nhật. Vòng 1 được giữ nguyên và chỉ dùng để đối chiếu mô tả, không gộp mẫu hay kiểm định khác biệt giữa vòng.
+
+### 29. Việc WSL khởi động lại có ảnh hưởng đến cách diễn giải không?
+
+Có. Q03/Q06/Q12 hoàn tất trước khi khởi động lại, Q01 sau đó với cùng commit, image và tài nguyên của vòng 2. Hai warm-up trong mỗi application đo vẫn được thực hiện. Cả 192 cửa sổ tài nguyên đều đầy đủ, swap bằng 0, nhưng dữ liệu vẫn thuộc hai phiên máy nên không được coi là một phiên liên tục hoặc khẳng định mọi nhiễu đã được loại bỏ.
+
+Nguồn SF10: [báo cáo tích hợp](../../docs/research-report.md), [tổng hợp vòng 2](../../docs/benchmarks/sf10/sf10-r2-benchmark-summary.json), [receipt xác minh](../../docs/benchmarks/sf10/sf10-r2-final-verification.json).
 
 ## Câu trả lời kết thúc khi gặp câu hỏi ngoài phạm vi
 

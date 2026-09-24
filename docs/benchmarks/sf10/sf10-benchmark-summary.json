@@ -1,0 +1,130 @@
+{
+  "artifact_class": "exploratory-sf10-summary-v1",
+  "created_at": "2026-09-23T15:18:56.129742+00:00",
+  "status": "passed",
+  "labels": [
+    "exploratory",
+    "laptop",
+    "warm-storage-cache",
+    "tpch-derived",
+    "non-audited"
+  ],
+  "scale_factor": 10,
+  "dataset_id": "tpch-derived-sf10-852ad0a5ee31-v1",
+  "dataset_manifest_sha256": "d2743e81a4055bc8f07f94036749cb89243c49844ce3716f3f41c00281558582",
+  "git_commit": "412e949e76de838d58385ccc135dce579be94df9",
+  "container_image_digest": "sha256:dc61f4c81cb25d06e99e2f4c4a556cad94acb106d56537c61f8a6b3de0104b2b",
+  "raw_records": 56,
+  "measured_records": 40,
+  "runtime": {
+    "comet_version": "1.0.0",
+    "iceberg_version": "1.11.0",
+    "java_version": "17.0.19",
+    "scala_version": "2.13.17",
+    "spark_version": "4.1.3"
+  },
+  "resources": {
+    "allocated_cores": 2,
+    "cgroup_memory_limit_mib": 5120,
+    "cpu_model": "Intel(R) Core(TM) i7-10750H CPU @ 2.60GHz",
+    "executor_heap_mib": 2048,
+    "off_heap_mib": 1024
+  },
+  "results": [
+    {
+      "query_id": "Q01",
+      "spark_median_seconds": 42.731811076999996,
+      "comet_median_seconds": 8.873305496999999,
+      "median_paired_speedup": 4.8516320363806065,
+      "paired_speedup_ci95": [
+        3.5204595267721355,
+        5.299216354188752
+      ],
+      "measurement_pairs": 5,
+      "comet_native_coverage": [
+        1.0
+      ],
+      "comet_fallback_reasons": []
+    },
+    {
+      "query_id": "Q03",
+      "spark_median_seconds": 34.824895951,
+      "comet_median_seconds": 38.273479543,
+      "median_paired_speedup": 1.0294487901783471,
+      "paired_speedup_ci95": [
+        0.834211805974358,
+        1.0363466416352531
+      ],
+      "measurement_pairs": 5,
+      "comet_native_coverage": [
+        1.0
+      ],
+      "comet_fallback_reasons": []
+    },
+    {
+      "query_id": "Q06",
+      "spark_median_seconds": 5.801814608,
+      "comet_median_seconds": 3.608403907,
+      "median_paired_speedup": 1.572004314953219,
+      "paired_speedup_ci95": [
+        1.1188017722875558,
+        2.615098052370487
+      ],
+      "measurement_pairs": 5,
+      "comet_native_coverage": [
+        1.0
+      ],
+      "comet_fallback_reasons": []
+    },
+    {
+      "query_id": "Q12",
+      "spark_median_seconds": 19.437706744,
+      "comet_median_seconds": 13.926391852999998,
+      "median_paired_speedup": 1.6329568967927865,
+      "paired_speedup_ci95": [
+        1.3636331034774045,
+        1.6746210024769235
+      ],
+      "measurement_pairs": 5,
+      "comet_native_coverage": [
+        1.0
+      ],
+      "comet_fallback_reasons": []
+    }
+  ],
+  "evidence": [
+    {
+      "path": ".artifacts/campaigns/EXP-TPCH-SF10-Q01/campaign-verification.json",
+      "sha256": "c9212dde799530e10692f141ba625a137aa461111ea56297677a35f53c454d4a"
+    },
+    {
+      "path": "results/reports/sf10-Q01-summary.json",
+      "sha256": "16e5d6851e00eb334dbab8fc1b1e8d906386835559a701b1aa2034bbcc0cc03c"
+    },
+    {
+      "path": ".artifacts/campaigns/EXP-TPCH-SF10-Q03/campaign-verification.json",
+      "sha256": "1e08929f48fbb4e39c6ce06a2529aeee22522e504edf6e8e8d8163b00e977651"
+    },
+    {
+      "path": "results/reports/sf10-Q03-summary.json",
+      "sha256": "97981314813a4b6baa9caa26540acd045fda2e80bad14abeb52e2527c1b1a4b4"
+    },
+    {
+      "path": ".artifacts/campaigns/EXP-TPCH-SF10-Q06/campaign-verification.json",
+      "sha256": "c7364a3529644ed564a0b7e78051f9c3bec95a13afc849eea2270c38f33d9b09"
+    },
+    {
+      "path": "results/reports/sf10-Q06-summary.json",
+      "sha256": "dcd9adf819d5b2bcd972cd78493edf89c03af5deee28efb85837fddd9dbe8260"
+    },
+    {
+      "path": ".artifacts/campaigns/EXP-TPCH-SF10-Q12/campaign-verification.json",
+      "sha256": "32f9bac1e7c5098843421c4e19eb5cf7c8b2009dde9c5e1b3453106b61c40963"
+    },
+    {
+      "path": "results/reports/sf10-Q12-summary.json",
+      "sha256": "26a03a8792ec55e28b21514f6e318ad0db00093f13a2538054baeeaf73a07bbb"
+    }
+  ],
+  "note": "Five paired measurements per query; two untimed warmups within each measurement application. Includes separate correctness and plan-capture runs. Exploratory TPC-H-derived comparison, not an audited TPC-H result."
+}

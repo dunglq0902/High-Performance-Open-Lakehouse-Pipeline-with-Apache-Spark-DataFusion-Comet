@@ -1,0 +1,183 @@
+{
+  "artifact_class": "exploratory-sf10-summary-v1",
+  "round": 2,
+  "status": "passed",
+  "created_at": "2026-09-24T07:00:55.628211+00:00",
+  "labels": [
+    "exploratory",
+    "laptop",
+    "warm-storage-cache",
+    "tpch-derived",
+    "non-audited"
+  ],
+  "scale_factor": 10,
+  "dataset_id": "tpch-derived-sf10-852ad0a5ee31-v1",
+  "dataset_manifest_sha256": "d2743e81a4055bc8f07f94036749cb89243c49844ce3716f3f41c00281558582",
+  "git_commit": "e8c0c5c834b6ff2fd792f2220f79a5ae9db8728e",
+  "container_image_digest": "sha256:d1112e50ee3b26f1e8129143fcaf14ef2000ae2db12bb88166a578bee86d51cd",
+  "raw_records": 96,
+  "measured_records": 80,
+  "measurement_pairs_per_query": 10,
+  "schedule_seed": 20260923,
+  "untimed_warmups_per_measurement_application": 2,
+  "runtime": {
+    "comet_version": "1.0.0",
+    "iceberg_version": "1.11.0",
+    "java_version": "17.0.19",
+    "scala_version": "2.13.17",
+    "spark_version": "4.1.3"
+  },
+  "resources": {
+    "allocated_cores": 2,
+    "cgroup_memory_limit_mib": 5120,
+    "cpu_model": "Intel(R) Core(TM) i7-10750H CPU @ 2.60GHz",
+    "executor_heap_mib": 2048,
+    "off_heap_mib": 1024
+  },
+  "runtime_by_engine": {
+    "spark_baseline": {
+      "comet_version": null,
+      "iceberg_version": "1.11.0",
+      "java_version": "17.0.19",
+      "scala_version": "2.13.17",
+      "spark_version": "4.1.3"
+    },
+    "comet_accelerated": {
+      "comet_version": "1.0.0",
+      "iceberg_version": "1.11.0",
+      "java_version": "17.0.19",
+      "scala_version": "2.13.17",
+      "spark_version": "4.1.3"
+    }
+  },
+  "results": [
+    {
+      "query_id": "Q01",
+      "spark_median_seconds": 42.206175547499996,
+      "comet_median_seconds": 9.3181544785,
+      "median_paired_speedup": 4.5109782379721395,
+      "paired_speedup_ci95": [
+        4.154844121048997,
+        4.788276105842593
+      ],
+      "measurement_pairs": 10,
+      "interpretation": "comet_faster",
+      "comet_native_coverage": [
+        1.0
+      ],
+      "comet_fallback_reasons": []
+    },
+    {
+      "query_id": "Q03",
+      "spark_median_seconds": 36.6974084345,
+      "comet_median_seconds": 37.374279876,
+      "median_paired_speedup": 0.9940145824577356,
+      "paired_speedup_ci95": [
+        0.9385986580844357,
+        1.0309483166016227
+      ],
+      "measurement_pairs": 10,
+      "interpretation": "inconclusive",
+      "comet_native_coverage": [
+        1.0
+      ],
+      "comet_fallback_reasons": []
+    },
+    {
+      "query_id": "Q06",
+      "spark_median_seconds": 3.4615294254999998,
+      "comet_median_seconds": 2.3516703925,
+      "median_paired_speedup": 1.4601007037003089,
+      "paired_speedup_ci95": [
+        1.35514217367396,
+        1.566285620373051
+      ],
+      "measurement_pairs": 10,
+      "interpretation": "comet_faster",
+      "comet_native_coverage": [
+        1.0
+      ],
+      "comet_fallback_reasons": []
+    },
+    {
+      "query_id": "Q12",
+      "spark_median_seconds": 15.671929726499998,
+      "comet_median_seconds": 9.5985412805,
+      "median_paired_speedup": 1.6355647125909658,
+      "paired_speedup_ci95": [
+        1.529432564786794,
+        1.6814605266036986
+      ],
+      "measurement_pairs": 10,
+      "interpretation": "comet_faster",
+      "comet_native_coverage": [
+        1.0
+      ],
+      "comet_fallback_reasons": []
+    }
+  ],
+  "evidence": [
+    {
+      "path": ".artifacts/campaigns/EXP-TPCH-SF10-R2-Q01/campaign-verification.json",
+      "sha256": "b869bdb4e85c8dc667927ebd6647bcf64dd4169e3dfcd2d4223755afd6ae47d2"
+    },
+    {
+      "path": "results/reports/sf10-r2-Q01-summary.json",
+      "sha256": "972495304bf90ccb0c9f2b64d701937c2e1a0a6ce0b06360b69b132d345c02a4"
+    },
+    {
+      "path": ".artifacts/campaigns/EXP-TPCH-SF10-R2-Q03/campaign-verification.json",
+      "sha256": "2ad256bb1e33e911f8781c6f9907342488947c3d27d3f563ca27f64796329de8"
+    },
+    {
+      "path": "results/reports/sf10-r2-Q03-summary.json",
+      "sha256": "749925698bdd4b71254f37d7c71213738af3a643553a23ebafb8f2ce91a86e48"
+    },
+    {
+      "path": ".artifacts/campaigns/EXP-TPCH-SF10-R2-Q06/campaign-verification.json",
+      "sha256": "d3f0c853a2399f32a4f9a812840043ac2ee1f5b07a45b87a79198712376f9c40"
+    },
+    {
+      "path": "results/reports/sf10-r2-Q06-summary.json",
+      "sha256": "1340c21ba99014826d0b79f421b1fa4150f285df7fbe11d63364ab7d1eb8644b"
+    },
+    {
+      "path": ".artifacts/campaigns/EXP-TPCH-SF10-R2-Q12/campaign-verification.json",
+      "sha256": "560921d64a0a0f77300ce4af505ed5ce187132c994cacb7e5dc4ec2431c25dbe"
+    },
+    {
+      "path": "results/reports/sf10-r2-Q12-summary.json",
+      "sha256": "7eb38184d6a55dd11d085dda1a2bdebd7b461ca75ea514e05ea2bbb63f022e81"
+    },
+    {
+      "path": ".artifacts/sf10-r2-preflight/q01-mount-incident-archive.json",
+      "sha256": "07a5cd2db52d5842f39f322ba9cca3399b165b314bd37b5040c5d416e8b028fd"
+    }
+  ],
+  "previous_round_preserved_and_verified": true,
+  "complete_zero_swap_resource_windows": 192,
+  "resource_samples": 21443,
+  "resume_context": {
+    "observed_at": "2026-09-24T01:10:15.3838469Z",
+    "reason": "Launcher absent after WSL restart; no exit receipt. Q03 Q06 Q12 are complete and verified; Q01 has only its immutable plan.",
+    "completed_queries": [
+      "Q03",
+      "Q06",
+      "Q12"
+    ],
+    "raw_records": 72,
+    "measured_records": 60,
+    "git_commit": "e8c0c5c834b6ff2fd792f2220f79a5ae9db8728e",
+    "expected_image": "sha256:d1112e50ee3b26f1e8129143fcaf14ef2000ae2db12bb88166a578bee86d51cd"
+  },
+  "archived_launcher_incident": {
+    "archived": "/mnt/c/Users/ADMIN/.codex/worktrees/sf10-benchmark/High-Performance Open Lakehouse Pipeline with Apache Spark + DataFusion Comet/.artifacts/research-incident-archives/e8c0c5c834b6ff2fd792f2220f79a5ae9db8728e/sf10-r2-q01-stale-bind-20260924",
+    "verified": true,
+    "archive_class": "single-campaign-launcher-incident-v1",
+    "inventory_sha256": "300d627af6da1f64876b94941e18f9a6355c2b3f52b5f8ac8b1120ed1c9f0d40",
+    "file_count": 17,
+    "failed_launcher_attempts": 3,
+    "canonical_raw_records": 0
+  },
+  "note": "Independent second round. Ten paired measurements per query; two untimed warmups within each measurement application. Previous five-pair round is not pooled into these results. Exploratory TPC-H-derived comparison, not an audited TPC-H result."
+}

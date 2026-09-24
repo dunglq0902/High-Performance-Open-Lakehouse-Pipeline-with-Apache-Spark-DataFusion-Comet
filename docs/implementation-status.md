@@ -1,5 +1,10 @@
 # Implementation status — 2026-09-08
 
+**2026-09-24 update:** SF10 round 2 is complete. The [integrated research report](research-report.md)
+and 15-slide presentation now include its four queries with 10 measurement pairs each. SF10 uses
+separate exploratory verification receipts; the core publication rules and demo video are unchanged.
+The implementation checkpoint below is retained as historical context.
+
 The research software and both primary datasets are implemented and materialized. The primary
 E-commerce dataset is revision v3, generated from a reviewed clean generator commit.
 The empirical publication state is deliberately not hard-coded in this document: it is determined
@@ -96,7 +101,7 @@ publishable.
   CPU/RAM profiles over time, a native/fallback operator matrix, initial/final AQE plan stability,
   explicit RQ1/RQ2/RQ3 and H1/H2/H3 findings, attempt-aware failure counts, and report artifact
   inventory. Its independent content contract must pass in addition to the campaign-evidence gate.
-- A generated 12-slide deck is independently checked for package shape, 16:9 geometry, editable
+- A generated core deck is independently checked for package shape, 16:9 geometry, editable
   native charts/tables, speaker notes, diagnostic labels, binding to the current report, and an
   explicit full-deck visual-review attestation. The
   existing local deck is deliberately diagnostic because its campaign provenance predates the
@@ -226,10 +231,20 @@ All tracked code and documentation must be finalized before the first campaign. 
 requires raw provenance to equal the current clean HEAD; a later tracked commit intentionally
 invalidates publication until matching campaign evidence is produced.
 
-SF10, a larger backlog catalog, multi-node scale-out, continuous operation, and audited TPC-H
-claims remain outside the primary completion criterion.
+SF10 remains outside the primary completion criterion, but its exploratory extension is now
+complete. Round 2 (2026-09-24) has 10 pairs for each Q01/Q03/Q06/Q12, 80 measurement records,
+96 successful records and 192 complete zero-swap resource windows. Median paired speedups are
+4.51x / 0.99x / 1.46x / 1.64x; Q03's 95% interval contains 1. The independent five-pair round 1
+is preserved. See the [updated research report](research-report.md) for the data, uncertainty,
+two-session disclosure and SF1 comparison limitations. SF10 is a separate verified exploratory
+supplement, not an addition to the exact core publication set. The updated presentation has 15
+slides; the existing 13-slide core release finalizer remains scoped to the original deck. Video
+demo artifacts are unchanged. A larger backlog catalog, multi-node scale-out, continuous operation
+and audited TPC-H claims remain outside the primary completion criterion.
 
-At this checkpoint, the report content contract, diagnostic slide deck, Spark UI replay mechanism,
-media sidecar gates, and release packager are implemented. The project is still **not 100% complete**:
-the final tracked commit, fresh ten-campaign rerun at that commit, strict publishable report, final
-non-diagnostic PPTX/MP4, and verified full release ZIP remain outstanding execution artifacts.
+At the earlier core implementation checkpoint, the report content contract, diagnostic slide deck,
+Spark UI replay mechanism, media sidecar gates and release packager were implemented. Outstanding
+execution artifacts at that checkpoint included the final tracked commit, a ten-campaign rerun,
+a strict publishable report, final non-diagnostic PPTX/MP4 and a verified full release ZIP.
+Consult the dated evidence receipts for subsequent completion rather than treating this historical
+checklist as the current run state.

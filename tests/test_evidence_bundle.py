@@ -212,12 +212,12 @@ def _write_media_sidecars(
                 "size_bytes": presentation.stat().st_size,
                 "sha256": _sha256(presentation),
                 "format": "pptx",
-                "slide_count": 12,
+                "slide_count": 13,
                 "slide_width_emu": 12_192_000,
                 "slide_height_emu": 6_858_000,
                 "native_chart_count": 7,
-                "native_table_slide_count": 2,
-                "notes_slide_count": 12,
+                "native_table_slide_count": 3,
+                "notes_slide_count": 13,
                 "diagnostic_marker_slide_count": 0,
             },
             "report_publishability": {
@@ -230,7 +230,7 @@ def _write_media_sidecars(
             "visual_review": {
                 "confirmed": True,
                 "scope": (
-                    "All 12 rendered slides were inspected for clipping, overlap, legibility, "
+                    "All 13 rendered slides were inspected for clipping, overlap, legibility, "
                     "chart/table rendering, and the correct publication or diagnostic label."
                 ),
             },

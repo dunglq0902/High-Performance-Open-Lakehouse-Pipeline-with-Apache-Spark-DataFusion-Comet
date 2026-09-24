@@ -1,0 +1,91 @@
+{
+  "artifact_class": "sf10-documentation-evidence-copy-v1",
+  "source_workspace": "C:/Users/ADMIN/.codex/worktrees/sf10-benchmark/High-Performance Open Lakehouse Pipeline with Apache Spark + DataFusion Comet",
+  "scope": "Byte-identical report snapshots and verification receipts. Raw campaigns and incident archives remain in the source workspace. This index is not a core release publication receipt.",
+  "artifacts": [
+    {
+      "path": "sf10-Q01-summary.json",
+      "source_path": "results/reports/sf10-Q01-summary.json",
+      "size_bytes": 4098,
+      "sha256": "16e5d6851e00eb334dbab8fc1b1e8d906386835559a701b1aa2034bbcc0cc03c"
+    },
+    {
+      "path": "sf10-Q03-summary.json",
+      "source_path": "results/reports/sf10-Q03-summary.json",
+      "size_bytes": 4076,
+      "sha256": "97981314813a4b6baa9caa26540acd045fda2e80bad14abeb52e2527c1b1a4b4"
+    },
+    {
+      "path": "sf10-Q06-summary.json",
+      "source_path": "results/reports/sf10-Q06-summary.json",
+      "size_bytes": 3984,
+      "sha256": "dcd9adf819d5b2bcd972cd78493edf89c03af5deee28efb85837fddd9dbe8260"
+    },
+    {
+      "path": "sf10-Q12-summary.json",
+      "source_path": "results/reports/sf10-Q12-summary.json",
+      "size_bytes": 4126,
+      "sha256": "26a03a8792ec55e28b21514f6e318ad0db00093f13a2538054baeeaf73a07bbb"
+    },
+    {
+      "path": "sf10-benchmark-report.md",
+      "source_path": "results/reports/sf10-benchmark-report.md",
+      "size_bytes": 2246,
+      "sha256": "11db37916d7caa0a01ed14543ffa7e13aad557c0513e487e8470c40535b5c29c"
+    },
+    {
+      "path": "sf10-benchmark-summary.json",
+      "source_path": "results/reports/sf10-benchmark-summary.json",
+      "size_bytes": 4164,
+      "sha256": "3c64cca76b314883befa97f2af5eac6d20a7b98e9d220eece235d9838cd0bbdd"
+    },
+    {
+      "path": "sf10-final-verification.json",
+      "source_path": ".artifacts/sf10-preflight/final-verification.json",
+      "size_bytes": 1104,
+      "sha256": "83964b8e1acd771f95a8dd8562cac20f1d76c4035ccd9767bd5e68e90ea00ecc"
+    },
+    {
+      "path": "sf10-r2-Q01-summary.json",
+      "source_path": "results/reports/sf10-r2-Q01-summary.json",
+      "size_bytes": 4104,
+      "sha256": "972495304bf90ccb0c9f2b64d701937c2e1a0a6ce0b06360b69b132d345c02a4"
+    },
+    {
+      "path": "sf10-r2-Q03-summary.json",
+      "source_path": "results/reports/sf10-r2-Q03-summary.json",
+      "size_bytes": 4170,
+      "sha256": "749925698bdd4b71254f37d7c71213738af3a643553a23ebafb8f2ce91a86e48"
+    },
+    {
+      "path": "sf10-r2-Q06-summary.json",
+      "source_path": "results/reports/sf10-r2-Q06-summary.json",
+      "size_bytes": 3984,
+      "sha256": "1340c21ba99014826d0b79f421b1fa4150f285df7fbe11d63364ab7d1eb8644b"
+    },
+    {
+      "path": "sf10-r2-Q12-summary.json",
+      "source_path": "results/reports/sf10-r2-Q12-summary.json",
+      "size_bytes": 4145,
+      "sha256": "7eb38184d6a55dd11d085dda1a2bdebd7b461ca75ea514e05ea2bbb63f022e81"
+    },
+    {
+      "path": "sf10-r2-benchmark-report.md",
+      "source_path": "results/reports/sf10-r2-benchmark-report.md",
+      "size_bytes": 3449,
+      "sha256": "1a63fdb8c1d7e17de9337eba062bc4889e4c45457e5e7c3ea6cc28d202fb43b5"
+    },
+    {
+      "path": "sf10-r2-benchmark-summary.json",
+      "source_path": "results/reports/sf10-r2-benchmark-summary.json",
+      "size_bytes": 6297,
+      "sha256": "9916c859c22c5aef04b1ee0283dc20f29ddc10b883a81e2f17fe8103775589e5"
+    },
+    {
+      "path": "sf10-r2-final-verification.json",
+      "source_path": ".artifacts/sf10-r2-preflight/final-verification.json",
+      "size_bytes": 458,
+      "sha256": "d07a81f57b3224bb3acc4a64a1be31551abb652f93c4d243f0513e85e8be8c1d"
+    }
+  ]
+}

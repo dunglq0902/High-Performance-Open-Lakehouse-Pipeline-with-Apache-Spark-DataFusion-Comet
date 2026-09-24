@@ -1,0 +1,13 @@
+{
+  "status": "passed",
+  "checked_at": "2026-09-24T07:00:55.628211+00:00",
+  "git_commit": "e8c0c5c834b6ff2fd792f2220f79a5ae9db8728e",
+  "campaigns": 4,
+  "raw_records": 96,
+  "measured_records": 80,
+  "raw_and_control_digests_verified": true,
+  "previous_round_preserved_and_verified": true,
+  "complete_zero_swap_resource_windows": 192,
+  "resource_samples": 21443,
+  "summary_sha256": "9916c859c22c5aef04b1ee0283dc20f29ddc10b883a81e2f17fe8103775589e5"
+}

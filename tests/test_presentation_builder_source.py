@@ -37,3 +37,18 @@ def test_presentation_builder_derives_claims_and_axes_from_report_data() -> None
     )
 
     assert all(fragment in source for fragment in required)
+
+
+def test_presentation_builder_labels_gluten_velox_as_external_noncomparable_evidence() -> None:
+    source = PRESENTATION_SOURCE.read_text(encoding="utf-8")
+
+    required = (
+        "Gluten + Velox là một lựa chọn native khác",
+        "không phải xếp hạng trực tiếp",
+        "overallSpeedup: 3.34",
+        "maximumQuerySpeedup: 23.45",
+        "github.com/apache/gluten-site/blob/main/index.md#5-performance",
+        "Khi cần benchmark trực tiếp trong production",
+    )
+
+    assert all(fragment in source for fragment in required)

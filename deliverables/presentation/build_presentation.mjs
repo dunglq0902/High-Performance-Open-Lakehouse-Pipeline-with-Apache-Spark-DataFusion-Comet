@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { createHash } from "node:crypto";
 
 import { Presentation, PresentationFile } from "@oai/artifact-tool";
 
@@ -11,6 +12,8 @@ const runtimePython = requireAbsoluteEnvironmentPath("RUNTIME_PYTHON");
 const options = parseArguments(process.argv.slice(2));
 const finalPath = resolveWorkspaceOutput(options.output);
 const reportDir = path.join(workspaceDir, "results", "reports");
+const sf10Dir = path.join(workspaceDir, "docs", "benchmarks", "sf10");
+const sf10 = options.includeSf10 ? await readVerifiedSf10() : null;
 
 const {
   applyPresentationChartFont,
@@ -172,6 +175,17 @@ const stablePlanCount = planExperiments.filter(
     item.engines.comet_accelerated.plans.final.stable === true,
 ).length;
 const evidenceCommit = String(planExperiments[0].identity.provenance.git_commit);
+const glutenVeloxPublicBenchmark = {
+  overallSpeedup: 3.34,
+  maximumQuerySpeedup: 23.45,
+  workload: "TPCH-like",
+  dataSize: "3 TB",
+  hardware: "Intel Xeon Platinum 8592+",
+  sparkVersion: "3.3.1",
+  tested: "03/2024",
+  source: "https://github.com/apache/gluten-site/blob/main/index.md#5-performance",
+  implementationSource: "https://github.com/apache/gluten/blob/main/docs/get-started/Velox.md",
+};
 
 const fontFamily = resolvePresentationFont();
 const presentation = Presentation.create({ slideSize: { width: 1280, height: 720 } });
@@ -269,7 +283,9 @@ function addBaseSlide(title, subtitle = null) {
 function setNotes(slide, sources, extra = "") {
   const status = diagnostic
     ? "Disclosure: diagnostic deck. The current report publishability gate is false."
-    : "Disclosure: the report publishability gate passed for the evidence used in this deck.";
+    : sf10
+      ? "Disclosure: core results use the historically admitted report snapshot. SF10 is a separately verified exploratory supplement, not part of the core release publication gate."
+      : "Disclosure: the report publishability gate passed for the evidence used in this deck.";
   slide.speakerNotes.textFrame.setText(
     [status, extra, "Sources:", ...sources.map((source) => `- ${source}`)]
       .filter(Boolean)
@@ -322,7 +338,9 @@ function styleTable(table, rows, columns, headerFontSize = 21, bodyFontSize = 20
   );
   addText(
     slide,
-    diagnostic
+    sf10
+      ? "Kết quả chính và mở rộng SF10 thăm dò"
+      : diagnostic
       ? "Báo cáo định lượng đang ở trạng thái chẩn đoán"
       : "Báo cáo định lượng đã qua cổng xuất bản",
     { left: 88, top: 500, width: 900, height: 42 },
@@ -330,7 +348,9 @@ function styleTable(table, rows, columns, headerFontSize = 21, bodyFontSize = 20
   );
   addText(
     slide,
-    `${campaignCount} workloads  ·  ${measurementPairsPerExperiment} cặp đo mỗi workload  ·  bằng chứng commit ${evidenceCommit.slice(0, 8)}`,
+    sf10
+      ? `${campaignCount} workload chính và 4 truy vấn SF10, mỗi bộ có 10 cặp đo/truy vấn`
+      : `${campaignCount} workloads  ·  ${measurementPairsPerExperiment} cặp đo mỗi workload  ·  bằng chứng commit ${evidenceCommit.slice(0, 8)}`,
     { left: 88, top: 555, width: 1020, height: 34 },
     { fontSize: 19, color: "#CBD5E1" },
   );
@@ -370,7 +390,9 @@ function styleTable(table, rows, columns, headerFontSize = 21, bodyFontSize = 20
   });
   addText(
     slide,
-    `Phạm vi chính: ${nonTpchExperimentCount} workload nghiệp vụ/micro, ${tpchExperimentCount} truy vấn TPC-H-derived${formatScaleScope(presentScales)}, một Spark worker 2 core và giới hạn cgroup 5 GiB.`,
+    sf10
+      ? `Ma trận chính: ${nonTpchExperimentCount} workload nghiệp vụ/micro và ${tpchExperimentCount} truy vấn SF1. Mở rộng: 4 truy vấn SF10. Một Spark worker, 2 core, cgroup 5 GiB.`
+      : `Phạm vi chính: ${nonTpchExperimentCount} workload nghiệp vụ/micro, ${tpchExperimentCount} truy vấn TPC-H-derived${formatScaleScope(presentScales)}, một Spark worker 2 core và giới hạn cgroup 5 GiB.`,
     { left: 78, top: 555, width: 1110, height: 80 },
     { fontSize: 23, color: COLORS.muted },
   );
@@ -380,7 +402,7 @@ function styleTable(table, rows, columns, headerFontSize = 21, bodyFontSize = 20
 // 3. Evidence base
 {
   const slide = addBaseSlide(
-    "Cơ sở bằng chứng",
+    sf10 ? "Cơ sở bằng chứng của ma trận chính" : "Cơ sở bằng chứng",
     "Measurement failures và execution attempt failures được báo cáo riêng",
   );
   const values = [
@@ -891,15 +913,152 @@ function styleTable(table, rows, columns, headerFontSize = 21, bodyFontSize = 20
   setNotes(slide, ["results/reports/plan-insights.json", "results/reports/research-findings.json"]);
 }
 
-// 11. Research answers
+// 11. Competitive comparison
+{
+  const slide = addBaseSlide(
+    "Gluten + Velox là một lựa chọn native khác",
+    "Benchmark công khai cung cấp tham chiếu, không phải xếp hạng trực tiếp",
+  );
+  const values = [
+    ["Tiêu chí", "Đề tài này: Comet", "Gluten + Velox công khai"],
+    [
+      "Kết quả",
+      `${number(suite.geometric_mean_speedup).toFixed(3)}x geometric mean; ${pairedSpeedups[strongestSpeedupIndex].toFixed(3)}x cao nhất (${queryOrder[strongestSpeedupIndex]}).`,
+      `${glutenVeloxPublicBenchmark.overallSpeedup.toFixed(2)}x overall; ${glutenVeloxPublicBenchmark.maximumQuerySpeedup.toFixed(2)}x cao nhất ở một query.`,
+    ],
+    [
+      "Phạm vi",
+      `${experiments.length} workload: e-commerce và TPC-H-derived ${formatScaleScope(presentScales).replace(" tại ", "")}.`,
+      `${glutenVeloxPublicBenchmark.workload}, ${glutenVeloxPublicBenchmark.dataSize}, công bố ${glutenVeloxPublicBenchmark.tested}.`,
+    ],
+    [
+      "Môi trường",
+      "Spark 4.1.3; laptop, 2 core, giới hạn cgroup 5 GiB.",
+      `Spark ${glutenVeloxPublicBenchmark.sparkVersion}; single node, ${glutenVeloxPublicBenchmark.hardware}.`,
+    ],
+    [
+      "Cách đo",
+      `${measurementPairsPerExperiment} cặp/workload; median paired speedup và bootstrap CI 95%.`,
+      "Kết quả tổng hợp do dự án Gluten công bố; cấu hình và phương pháp riêng.",
+    ],
+  ];
+  const table = slide.tables.add({
+    rows: values.length,
+    columns: 3,
+    left: 68,
+    top: 155,
+    width: 1144,
+    height: 350,
+    columnWidths: [175, 465, 504],
+    values,
+  });
+  styleTable(table, values.length, 3, 19, 18);
+  addText(
+    slide,
+    "Khi cần benchmark trực tiếp trong production",
+    { left: 78, top: 535, width: 650, height: 38 },
+    { fontSize: 25, bold: true, color: COLORS.comet },
+  );
+  addText(
+    slide,
+    "Khi phiên bản Spark, dữ liệu và storage, operator fallback, phần cứng hoặc SLA khác nguồn công khai. So sánh A/B trên cùng snapshot và resource envelope, kèm correctness gate, p95, chi phí và plan coverage.",
+    { left: 78, top: 580, width: 1120, height: 72 },
+    { fontSize: 20, color: COLORS.ink },
+  );
+  setNotes(slide, [
+    "results/reports/research-findings.json",
+    glutenVeloxPublicBenchmark.source,
+    glutenVeloxPublicBenchmark.implementationSource,
+  ]);
+}
+
+// SF10 supplement: kept separate from the core estimators and publication gate.
+if (sf10) {
+  const slide = addBaseSlide(
+    "SF10: Comet nhanh hơn ở 3/4 truy vấn",
+    "Vòng 2, 10 cặp/truy vấn. 80 lượt đo và 16 lượt kiểm tra đều thành công",
+  );
+  const values = [
+    ["Truy vấn", "Spark (giây)", "Comet (giây)", "Tăng tốc", "CI 95%"],
+    ...sf10.results.map((row) => [
+      row.query_id,
+      row.spark_median_seconds.toFixed(3),
+      row.comet_median_seconds.toFixed(3),
+      `${row.median_paired_speedup.toFixed(2)}×`,
+      `${row.paired_speedup_ci95[0].toFixed(2)}–${row.paired_speedup_ci95[1].toFixed(2)}×`,
+    ]),
+  ];
+  const table = slide.tables.add({
+    rows: values.length, columns: 5, left: 75, top: 165,
+    width: 1130, height: 325, columnWidths: [170, 230, 230, 210, 290], values,
+  });
+  styleTable(table, values.length, 5, 23, 25);
+  addText(slide, "Q03: 0,99×, CI chứa 1×. Chưa thấy khác biệt tốc độ chắc chắn.",
+    { left: 80, top: 520, width: 1120, height: 43 },
+    { fontSize: 26, bold: true, color: COLORS.warning });
+  addText(slide, "Thời gian là trung vị. Tăng tốc là trung vị tỷ số Spark/Comet theo cặp.\n192 cửa sổ tài nguyên đầy đủ, swap bằng 0. TPC-H-derived, thăm dò trên laptop.",
+    { left: 80, top: 585, width: 1120, height: 76 },
+    { fontSize: 21, color: COLORS.muted });
+  setNotes(slide, [
+    "docs/benchmarks/sf10/sf10-r2-benchmark-summary.json",
+    "docs/benchmarks/sf10/sf10-r2-final-verification.json",
+    "docs/research-report.md",
+  ], `SF10 evidence commit ${sf10.git_commit}. Balanced 5 AB / 5 BA, seed ${sf10.schedule_seed}. Two untimed warmups inside each measurement application. Q03/Q06/Q12 completed before a WSL restart, Q01 after restart with the same commit/image/resources. Three pre-query launcher failures were archived separately, with zero query measurements from those attempts. This round has 96 successful records and is not pooled with round 1 (5 pairs/query). Native coverage is 100% for all four queries, including Q03.`);
+}
+
+if (sf10) {
+  const slide = addBaseSlide(
+    "Đối chiếu SF1 và SF10 theo từng truy vấn",
+    "Trung vị tăng tốc theo cặp. So sánh mô tả giữa hai bộ đo độc lập",
+  );
+  const sf1Values = sf10.results.map((row) => {
+    const experiment = experiments.find((item) => item.query_id === row.query_id && item.workload === "tpch");
+    if (!experiment) throw new Error(`Missing SF1 evidence for ${row.query_id}`);
+    return number(experiment.paired_speedup.median);
+  });
+  const sf10Values = sf10.results.map((row) => row.median_paired_speedup);
+  const chart = slide.charts.add("bar", {
+    position: { left: 65, top: 165, width: 795, height: 460 },
+    categories: sf10.results.map((row) => row.query_id),
+    series: [
+      { name: "SF1 (ma trận chính)", values: sf1Values, fill: COLORS.spark, valuesFormatCode: '0.00"×"' },
+      { name: "SF10 (vòng 2)", values: sf10Values, fill: COLORS.comet, valuesFormatCode: '0.00"×"' },
+    ],
+    barOptions: { direction: "bar", grouping: "clustered", gapWidth: 65 },
+    hasLegend: true,
+    legend: { position: "bottom", textStyle: { fill: COLORS.ink, fontSize: 17 } },
+    xAxis: {
+      ...chartAxis([...sf1Values, ...sf10Values], { includeZero: true, targetTicks: 5 }),
+      numberFormatCode: '0.0"×"',
+      majorGridlines: { style: "solid", fill: COLORS.pale, width: 1 },
+      textStyle: { fill: COLORS.muted, fontSize: 16 },
+    },
+    yAxis: { textStyle: { fill: COLORS.ink, fontSize: 21, bold: true } },
+    dataLabels: { showValue: true, position: "outEnd", textStyle: { fill: COLORS.ink, fontSize: 18 } },
+    chartFill: COLORS.background, plotAreaFill: COLORS.background,
+  });
+  styleChart(chart);
+  addText(slide, "Q03 ở SF10 gần 1×", { left: 915, top: 185, width: 300, height: 70 },
+    { fontSize: 30, bold: true, color: COLORS.warning });
+  addText(slide, "Cả 4 truy vấn SF10 có 100% native coverage. Coverage cao vẫn có thể đi cùng lợi ích tốc độ nhỏ.",
+    { left: 915, top: 290, width: 290, height: 145 }, { fontSize: 23 });
+  addText(slide, "Hai bộ đo khác commit và giao thức warm-up. Chưa tách được tác động riêng của scale.",
+    { left: 915, top: 475, width: 290, height: 130 }, { fontSize: 22, color: COLORS.muted });
+  addText(slide, "Không gộp mẫu, không kiểm định khác biệt giữa scale. Q01 SF10 chạy sau khi WSL khởi động lại.",
+    { left: 80, top: 650, width: 1130, height: 35 }, { fontSize: 19, color: COLORS.muted });
+  setNotes(slide, ["results/reports/research-findings.json", "docs/benchmarks/sf10/sf10-r2-benchmark-summary.json", "docs/research-report.md"],
+    `Core evidence commit ${evidenceCommit}; SF10 commit ${sf10.git_commit}. Core application warmups and SF10 in-application untimed warmups differ. Runtime version equality alone does not establish an isolated scale experiment. SF10 has two machine sessions. Per-scale uncertainty is reported in docs/research-report.md; no difference CI or scalability law is estimated.`);
+}
+
+// 12 (14 with SF10). Research answers
 {
   const slide = addBaseSlide("Kết luận RQ1, RQ2 và RQ3");
   const values = [
     ["Câu hỏi", "Kết luận", "Bằng chứng chính"],
     [
       "RQ1",
-      `Comet giảm median latency ở ${medianSpeedupAboveOneCount}/${experiments.length} workload.`,
-      `${number(suite.geometric_mean_speedup).toFixed(3)}x geometric mean. ${ciAboveOneCount}/${experiments.length} CI có cận dưới trên 1.`,
+      sf10 ? "Ma trận chính: 10/10 workload. SF10: lợi ích rõ ở Q01, Q06, Q12." : `Comet giảm median latency ở ${medianSpeedupAboveOneCount}/${experiments.length} workload.`,
+      sf10 ? "SF10: Q01 4,51×, Q06 1,46×, Q12 1,64×. Q03 chưa rõ khác biệt." : `${number(suite.geometric_mean_speedup).toFixed(3)}x geometric mean. ${ciAboveOneCount}/${experiments.length} CI có cận dưới trên 1.`,
     ],
     [
       "RQ2",
@@ -908,8 +1067,8 @@ function styleTable(table, rows, columns, headerFontSize = 21, bodyFontSize = 20
     ],
     [
       "RQ3",
-      rq3Conclusion(findings.H3),
-      rq3Evidence(findings.RQ3.scale_comparison),
+      rq3Conclusion(findings.H3, sf10),
+      rq3Evidence(findings.RQ3.scale_comparison, sf10),
     ],
   ];
   const table = slide.tables.add({
@@ -929,12 +1088,12 @@ function styleTable(table, rows, columns, headerFontSize = 21, bodyFontSize = 20
     { left: 75, top: 625, width: 1110, height: 38 },
     { fontSize: 21, color: COLORS.muted },
   );
-  setNotes(slide, ["results/reports/research-findings.json", "results/reports/technical-report.md"]);
+  setNotes(slide, ["results/reports/research-findings.json", "results/reports/technical-report.md", ...(sf10 ? ["docs/research-report.md", "docs/benchmarks/sf10/sf10-r2-benchmark-summary.json"] : [])]);
 }
 
-// 12. Limits and release workflow
+// 13. Limits and release workflow
 {
-  const slide = addBaseSlide("Phạm vi kết luận và quy trình phát hành");
+  const slide = addBaseSlide(sf10 ? "Phạm vi kết luận và hướng tiếp theo" : "Phạm vi kết luận và quy trình phát hành");
   addText(slide, "Giới hạn diễn giải", { left: 78, top: 150, width: 480, height: 45 }, {
     fontSize: 30,
     bold: true,
@@ -945,20 +1104,25 @@ function styleTable(table, rows, columns, headerFontSize = 21, bodyFontSize = 20
     [
       "Một Spark worker với 2 core và giới hạn cgroup 5 GiB.",
       `Mỗi workload có ${measurementPairsPerExperiment} cặp đo. P95 không được ước lượng.`,
-      tpchScopeLimit(presentScales),
+      sf10 ? "TPC-H-derived ở SF1 và SF10, chưa được kiểm toán." : tpchScopeLimit(presentScales),
       fallbackLimit(lowestNativeExperiment.query_id, lowestNativeComet),
     ],
     { left: 78, top: 215, width: 520, height: 330 },
     { fontSize: 22 },
   );
-  addText(slide, "Quy trình phát hành", { left: 680, top: 150, width: 500, height: 45 }, {
+  addText(slide, sf10 ? "Hướng tiếp theo" : "Quy trình phát hành", { left: 680, top: 150, width: 500, height: 45 }, {
     fontSize: 30,
     bold: true,
     color: COLORS.comet,
   });
   addBullets(
     slide,
-    [
+    sf10 ? [
+      "Đo lại SF1 và SF10 trên cùng commit và giao thức warm-up.",
+      "Tăng số cặp lên ít nhất 20 để phân tích P95.",
+      "Lặp ở nhiều phiên máy và thử nghiệm nhiều worker.",
+      "So sánh trực tiếp với Gluten + Velox trên cùng dữ liệu.",
+    ] : [
       "Chốt mã nguồn và commit cuối.",
       "Chạy make benchmark để tạo campaign cùng commit.",
       "Chạy make report và kiểm tra publishable: true.",
@@ -969,7 +1133,9 @@ function styleTable(table, rows, columns, headerFontSize = 21, bodyFontSize = 20
   );
   addText(
     slide,
-    diagnostic
+    sf10
+      ? "SF10 bổ sung bằng chứng thăm dò. Chưa suy ra quy luật mở rộng theo quy mô."
+      : diagnostic
       ? "Hiện tại: hợp đồng nội dung đã đạt, nhưng provenance chưa khớp mã nguồn đang sửa."
       : "Hiện tại: bằng chứng và báo cáo đã qua cổng xuất bản.",
     { left: 80, top: 590, width: 1110, height: 55 },
@@ -992,9 +1158,9 @@ if (diagnostic) {
 }
 
 const requirements = {
-  explicitTotalSlideCount: 12,
-  requiredNativeTableOwnerSlides: [3, 11],
-  requiredNativeChartOwnerSlides: [5, 6, 7, 8, 9, 10],
+  explicitTotalSlideCount: sf10 ? 15 : 13,
+  requiredNativeTableOwnerSlides: sf10 ? [3, 11, 12, 14] : [3, 11, 12],
+  requiredNativeChartOwnerSlides: sf10 ? [5, 6, 7, 8, 9, 10, 13] : [5, 6, 7, 8, 9, 10],
   requiredEmbeddedWorkbookChartOwnerSlides: [],
   materializeLiteralChartWorkbooks: true,
   nativeChartTargetApplication: "powerpoint",
@@ -1060,11 +1226,13 @@ function requireAbsoluteEnvironmentPath(name) {
 }
 
 function parseArguments(args) {
-  const parsed = { allowDiagnostic: false, demoStatus: "", output: "" };
+  const parsed = { allowDiagnostic: false, includeSf10: false, demoStatus: "", output: "" };
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--allow-diagnostic") {
       parsed.allowDiagnostic = true;
+    } else if (argument === "--include-sf10") {
+      parsed.includeSf10 = true;
     } else if (argument === "--output") {
       parsed.output = args[index + 1] ?? "";
       index += 1;
@@ -1105,6 +1273,28 @@ async function assertOutputDoesNotExist(target) {
 
 async function readJson(target) {
   return JSON.parse(await fs.readFile(target, "utf8"));
+}
+
+async function readVerifiedSf10() {
+  const index = await readJson(path.join(sf10Dir, "evidence-index.json"));
+  for (const entry of index.artifacts) {
+    if (path.basename(entry.path) !== entry.path) throw new Error("Unsafe SF10 evidence path");
+    const bytes = await fs.readFile(path.join(sf10Dir, entry.path));
+    if (bytes.length !== entry.size_bytes || createHash("sha256").update(bytes).digest("hex") !== entry.sha256) {
+      throw new Error(`SF10 evidence digest mismatch: ${entry.path}`);
+    }
+  }
+  const bytes = await fs.readFile(path.join(sf10Dir, "sf10-r2-benchmark-summary.json"));
+  const receipt = await readJson(path.join(sf10Dir, "sf10-r2-final-verification.json"));
+  const summary = JSON.parse(bytes.toString("utf8"));
+  if (receipt.status !== "passed" || createHash("sha256").update(bytes).digest("hex") !== receipt.summary_sha256 ||
+      summary.status !== "passed" || summary.round !== 2 || summary.scale_factor !== 10 ||
+      summary.raw_records !== 96 || summary.measured_records !== 80 ||
+      summary.measurement_pairs_per_query !== 10 || summary.results.length !== 4 ||
+      summary.results.map((row) => row.query_id).join(",") !== "Q01,Q03,Q06,Q12") {
+    throw new Error("SF10 round 2 evidence does not match its verification receipt");
+  }
+  return summary;
 }
 
 function number(value) {
@@ -1243,14 +1433,16 @@ function rq2Conclusion(fullCount, total, queryId, lowestCoverage) {
   return `${fullCount}/${total} workload đạt 100%; ${queryId} thấp nhất ${(lowestCoverage * 100).toFixed(0)}%.`;
 }
 
-function rq3Conclusion(h3) {
+function rq3Conclusion(h3, supplement = null) {
+  if (supplement) return "Đã có đối chiếu SF1 và SF10 theo truy vấn. Chỉ mang tính mô tả.";
   if (h3.assessment === "descriptive_only") {
     return "So sánh scale chỉ mang tính mô tả; không suy diễn xu hướng tổng quát hay overhead nhân quả.";
   }
   return "Chưa ước lượng được scale sensitivity hoặc overhead nhân quả.";
 }
 
-function rq3Evidence(scaleComparison) {
+function rq3Evidence(scaleComparison, supplement = null) {
+  if (supplement) return "4 truy vấn ở hai scale. Khác commit và warm-up nên chưa tách được tác động của scale.";
   const matched = number(scaleComparison.matched_query_count);
   if (matched > 0) {
     const scope =

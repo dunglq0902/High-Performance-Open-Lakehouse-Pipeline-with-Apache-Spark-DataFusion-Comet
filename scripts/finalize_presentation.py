@@ -708,17 +708,17 @@ def finalize_presentation(
     inspection = _inspect_deck(presentation_path)
     if _snapshot_regular_file(presentation_path, label="presentation") != presentation_binding:
         raise PresentationEvidenceError("presentation changed during package inspection")
-    if inspection.slide_count != 12:
+    if inspection.slide_count != 13:
         raise PresentationEvidenceError(
-            f"presentation must contain exactly 12 slides, found {inspection.slide_count}"
+            f"presentation must contain exactly 13 slides, found {inspection.slide_count}"
         )
     if (inspection.slide_width_emu, inspection.slide_height_emu) != _EXPECTED_SLIDE_SIZE:
         raise PresentationEvidenceError("presentation must use the expected 16:9 slide size")
     if inspection.chart_count < 7:
         raise PresentationEvidenceError("presentation must contain at least seven native charts")
-    if inspection.table_slide_count < 2:
+    if inspection.table_slide_count < 3:
         raise PresentationEvidenceError(
-            "presentation must contain native tables on at least two slides"
+            "presentation must contain native tables on at least three slides"
         )
     if inspection.notes_slide_count < inspection.slide_count:
         raise PresentationEvidenceError("every presentation slide must contain speaker notes")
@@ -787,7 +787,7 @@ def finalize_presentation(
         "visual_review": {
             "confirmed": confirm_visual_review,
             "scope": (
-                "All 12 rendered slides were inspected for clipping, overlap, legibility, "
+                "All 13 rendered slides were inspected for clipping, overlap, legibility, "
                 "chart/table rendering, and the correct publication or diagnostic label."
             ),
         },
