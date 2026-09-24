@@ -1,5 +1,6 @@
 PYTHON ?= python3
 UV ?= uv
+.DEFAULT_GOAL := setup
 
 PROFILE ?= smoke-local
 BENCHMARK_CONFIG ?= benchmark/configs/benchmark-laptop-m02.yaml
@@ -35,6 +36,16 @@ TPCH_CORE_CONFIGS := \
 	benchmark/configs/benchmark-laptop-tpch-q06.yaml \
 	benchmark/configs/benchmark-laptop-tpch-q12.yaml
 RESEARCH_CORE_CONFIGS := $(ECOMMERCE_CORE_CONFIGS) $(TPCH_CORE_CONFIGS)
+SF10_COMPOSE_PROJECT ?= lakehouse-comet-sf10-r2
+SF10_EVIDENCE_ROOT ?= .
+SF10_SOURCE_COMMIT ?=
+SF10_ROUND ?= 2
+SF10_OUTPUT_DIR ?= results/sf10/rebuilt-r2
+SF10_R2_CONFIGS := \
+	benchmark/configs/benchmark-laptop-tpch-sf10-r2-q03.yaml \
+	benchmark/configs/benchmark-laptop-tpch-sf10-r2-q06.yaml \
+	benchmark/configs/benchmark-laptop-tpch-sf10-r2-q12.yaml \
+	benchmark/configs/benchmark-laptop-tpch-sf10-r2-q01.yaml
 
 .PHONY: setup validate validate-research lint test fixture research-data \
 	research-data-ecommerce research-data-tpch plan research-plan \
@@ -46,7 +57,18 @@ RESEARCH_CORE_CONFIGS := $(ECOMMERCE_CORE_CONFIGS) $(TPCH_CORE_CONFIGS)
 	verify-evidence-bundle archive-research-evidence-dry-run \
 	archive-research-evidence archive-research-evidence-rollback \
 	archive-partial-research-incident-dry-run archive-partial-research-incident \
-	archive-partial-research-incident-rollback release clean-generated
+	archive-partial-research-incident-rollback release clean-generated benchmark-sf10 report-sf10
+
+# Run only from a clean, isolated checkout with its validated SF10 dataset.
+benchmark-sf10:
+	COMPOSE_PROJECT_NAME="$(SF10_COMPOSE_PROJECT)" $(UV) run python scripts/run_research_suite.py \
+		$(foreach config,$(SF10_R2_CONFIGS),--config $(config))
+
+# Historical evidence retains its original commit even when this code has moved on.
+report-sf10:
+	$(UV) run python -m scripts.build_sf10_report \
+		--evidence-root "$(SF10_EVIDENCE_ROOT)" --source-commit "$(SF10_SOURCE_COMMIT)" \
+		--round "$(SF10_ROUND)" --output-dir "$(SF10_OUTPUT_DIR)"
 
 setup:
 	$(PYTHON) scripts/bootstrap_env.py

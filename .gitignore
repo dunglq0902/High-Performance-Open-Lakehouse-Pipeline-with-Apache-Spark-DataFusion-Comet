@@ -17,6 +17,7 @@ data/manifests/generated/
 results/raw/*
 results/normalized/*
 results/reports/*
+results/sf10/
 !results/raw/.gitkeep
 !results/normalized/.gitkeep
 !results/reports/.gitkeep

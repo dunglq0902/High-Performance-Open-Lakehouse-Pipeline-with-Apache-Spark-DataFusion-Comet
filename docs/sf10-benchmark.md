@@ -71,8 +71,50 @@ uv run python scripts/run_research_suite.py \
   --config benchmark/configs/benchmark-laptop-tpch-sf10-r2-q01.yaml
 ```
 
-Summarize each `results/raw/EXP-TPCH-SF10-R2-*` directory separately. On WSL,
-pass an absolute output path, such as
-`--output "$PWD/results/reports/sf10-r2-Q03-summary.json"`, to avoid shared
-filesystem rename errors between relative and absolute paths. Resume with
-the same query order, committed checkout, and admitted image.
+`make benchmark-sf10` is the equivalent round-2 command, with that query order
+and `lakehouse-comet-sf10-r2` as its default Compose project. Resume with the
+same query order, committed checkout, and admitted image. A new measurement
+at a different commit requires a fresh checkout/evidence namespace; never
+reuse completed canonical records as measurements of the new code.
+
+## Rebuild a report without running Spark
+
+The tracked reporting command verifies the latest completion checkpoint,
+planned run identities, raw-record and artifact/control hashes, dataset
+manifest/attestation binding, source commit, image and resource/runtime
+consistency. It also requires complete driver/worker resource windows with
+zero swap, then recomputes paired statistics from the raw records.
+
+From this final code checkout, point it at the preserved SF10 evidence root
+(or an intact restored copy). The root must contain `results/raw`, the
+campaign/control trees under `.artifacts`, and the dataset manifest at
+`data/generated/tpch-derived-sf10-v1/manifest.json`:
+
+```bash
+make report-sf10 \
+  SF10_EVIDENCE_ROOT="/path/to/preserved-sf10-checkout" \
+  SF10_SOURCE_COMMIT=e8c0c5c834b6ff2fd792f2220f79a5ae9db8728e \
+  SF10_OUTPUT_DIR=results/sf10/rebuilt-r2
+```
+
+The output directory must be new. It contains four query summaries,
+`summary.json`, `report.md` and `verification.json` with output hashes.
+No Docker service is started and no source evidence is modified. The command
+does not rescan all Parquet data or confer the core publication status.
+For round 1, supply `SF10_ROUND=1`, source commit
+`412e949e76de838d58385ccc135dce579be94df9` and a different output directory.
+For a new campaign, use its actual measurement commit, not these historical IDs.
+
+Round 2 includes a disclosed WSL restart between completed query groups and
+three archived Q01 launcher failures before query execution. When present,
+the resume receipt and the archived incident inventory are checked and
+included in the rebuilt report. Keep these files when restoring evidence.
+The original round-2 result has 96 successful records, 80 measured runs,
+192 complete zero-swap resource windows and 21,443 samples. Its Q03 confidence
+interval contains 1; the report must describe that result as inconclusive.
+
+The [documentation snapshots](benchmarks/sf10/README.md) are small, byte-hash-bound
+report copies for review; they do not contain all raw/control evidence needed
+by this command. Their bytes are preserved by `.gitattributes` across checkouts.
+The final code commit and the historical measurement commit serve different
+purposes and must remain distinct in reports.

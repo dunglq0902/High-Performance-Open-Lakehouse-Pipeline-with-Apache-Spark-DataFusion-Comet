@@ -33,6 +33,11 @@ chắc chắn vì CI 95% chứa 1×. Xem [báo cáo nghiên cứu có SF10](docs
 [slide cập nhật](deliverables/presentation/lakehouse-comet-research-sf10-20260924.pptx).
 SF10 là phần mở rộng thăm dò, được báo cáo riêng với ma trận chính SF1. Video demo giữ nguyên.
 
+Mã SF10 đã được tích hợp, có lệnh `make benchmark-sf10` cho bộ 10 cặp đo và
+`make report-sf10` để tái tạo báo cáo từ bằng chứng đã lưu mà không chạy Spark.
+Xem [hướng dẫn chạy và tái tạo SF10](docs/sf10-benchmark.md) để chọn đúng thư mục
+bằng chứng, commit của phép đo và thư mục đầu ra mới.
+
 Toàn bộ kế hoạch nghiên cứu, cơ sở lý thuyết học thuật, thiết kế pipeline Medallion, ma trận thực nghiệm 3 tầng và lộ trình 8 tuần đã được đặc tả chi tiết tại:
 
 **[Xem Bản Đặc tả Đề tài Chi tiết (Project Specification)](docs/project_specification.md)**

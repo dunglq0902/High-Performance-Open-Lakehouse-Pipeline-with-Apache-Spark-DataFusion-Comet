@@ -5,3 +5,7 @@
 *.jpg binary
 *.jpeg binary
 *.parquet binary
+
+# These documentation snapshots are bound to byte hashes from completed campaigns.
+docs/benchmarks/sf10/sf10*.json -text
+docs/benchmarks/sf10/sf10*.md -text

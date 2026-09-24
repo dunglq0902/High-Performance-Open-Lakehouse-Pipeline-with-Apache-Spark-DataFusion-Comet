@@ -3,6 +3,10 @@
 **2026-09-24 update:** SF10 round 2 is complete. The [integrated research report](research-report.md)
 and 15-slide presentation now include its four queries with 10 measurement pairs each. SF10 uses
 separate exploratory verification receipts; the core publication rules and demo video are unchanged.
+SF10 implementation and both rounds' configurations are integrated into the final source tree.
+`make benchmark-sf10` runs round 2; `make report-sf10` verifies historical evidence and rebuilds
+its paired summaries without relabeling measurements with the final code commit.
+See [SF10 workflow](sf10-benchmark.md). The older release ZIP is not an SF10 package.
 The implementation checkpoint below is retained as historical context.
 
 The research software and both primary datasets are implemented and materialized. The primary

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pyarrow as pa  # type: ignore[import-untyped]
+import pytest
 
 from benchmark.runner.config import (
     load_document,
@@ -195,22 +196,40 @@ def test_every_core_workload_has_an_executable_laptop_config() -> None:
     assert set(configs) == CORE_IDS | TPCH_CORE_IDS
 
 
-def test_sf10_configs_preserve_sf1_queries_and_runtime_with_separate_identity() -> None:
-    configs = sorted(CONFIG_ROOT.glob("benchmark-laptop-tpch-sf10-*.yaml"))
+def test_smoke_config_matches_its_executable_spark_profile() -> None:
+    config = load_experiment(CONFIG_ROOT / "smoke-m02.yaml", EXPERIMENT_SCHEMA_ROOT)
+    validate_runtime_profile(config, ROOT)
+
+
+@pytest.mark.parametrize(
+    "suffix,identity,pairs,seed",
+    [
+        ("", "SF10", 5, 20260827),
+        ("r2-", "SF10-R2", 10, 20260923),
+    ],
+)
+def test_sf10_configs_preserve_sf1_queries_and_runtime_with_separate_identity(
+    suffix: str, identity: str, pairs: int, seed: int
+) -> None:
+    configs = sorted(CONFIG_ROOT.glob(f"benchmark-laptop-tpch-sf10-{suffix}q*.yaml"))
     assert len(configs) == 4
+    queries = set()
     for path in configs:
         config = load_experiment(path, EXPERIMENT_SCHEMA_ROOT)
         validate_runtime_profile(config, ROOT)
+        queries.add(config["workload"]["query_id"])
         baseline = load_experiment(
-            path.with_name(path.name.replace("sf10-", "")), EXPERIMENT_SCHEMA_ROOT
+            path.with_name(path.name.replace(f"sf10-{suffix}", "")), EXPERIMENT_SCHEMA_ROOT
         )
         assert config["spark"] == baseline["spark"]
         assert config["matrix"] == baseline["matrix"]
         assert config["workload"]["parameters"] == baseline["workload"]["parameters"]
         assert config["workload"]["scale_factor"] == 10
         assert "sf10-v1" in config["workload"]["dataset_manifest"]
-        assert config["experiment"]["id"] == baseline["experiment"]["id"].replace("SF1", "SF10")
-        assert config["experiment"]["measurement_runs"] >= 5
+        assert config["experiment"]["id"] == baseline["experiment"]["id"].replace("SF1", identity)
+        assert config["experiment"]["measurement_runs"] == pairs
+        assert config["experiment"]["seed"] == seed
         assert config["experiment"]["warmup_runs"] == baseline["experiment"]["warmup_runs"]
         assert "exploratory" in config["experiment"]["labels"]
         assert "primary" not in config["experiment"]["labels"]
+    assert queries == TPCH_CORE_IDS

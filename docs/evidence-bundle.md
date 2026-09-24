@@ -11,9 +11,15 @@ archive before any final file is published.
 - `results/reports/report-publishability.json` with `publishable: true` and a passed report-content
   contract.
 - The exact report directory described by `report-artifact-inventory.json`.
-- A final 12-slide PPTX plus its `publishable` presentation manifest.
+- A final 13-slide core PPTX plus its `publishable` presentation manifest.
 - A reviewed Spark History Server MP4 plus its `publishable` video manifest and paired demo bundle.
 - Both complete primary dataset roots and current/origin validation attestations.
+
+The 15-slide SF10 presentation is a separate exploratory supplement. Its
+verification and the historical SF10 reports do not replace these core inputs.
+The existing release ZIP predates SF10; updating code, docs and slides does not
+rebuild that archive. See [SF10 reproduction](sf10-benchmark.md) for the separate
+report command and required evidence trees.
 
 The full payload is expected to be roughly 2 GiB before the final video. The dataset roots are not
 optional: excluding them would prevent offline semantic verification and report reconstruction.
