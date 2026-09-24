@@ -318,6 +318,8 @@ def main() -> None:
                 "driver_resource_samples": resource_path.name,
             },
         }
+        if workload["suite"] == "tpch":
+            result["scale_factor"] = config["workload"]["scale_factor"]
         write_json(args.output, result)
         if failures:
             raise SystemExit(1)

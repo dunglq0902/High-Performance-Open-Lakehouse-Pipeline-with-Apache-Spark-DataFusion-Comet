@@ -46,9 +46,10 @@ def test_primary_profile_is_large_and_benchmark_eligible() -> None:
     assert profile.rows_per_file["order_items"] >= 1_000_000
 
 
-def test_tpch_import_contract_covers_all_eight_explicit_iceberg_tables() -> None:
+@pytest.mark.parametrize("scale_factor", [1, 10])
+def test_tpch_import_contract_covers_all_eight_explicit_iceberg_tables(scale_factor: int) -> None:
     manifest = {
-        "scale_factor": 1,
+        "scale_factor": scale_factor,
         "storage": {"profile": "tpch_parquet"},
         "tables": {table_name: {} for table_name in TPCH_TABLE_ORDER},
     }
@@ -58,6 +59,17 @@ def test_tpch_import_contract_covers_all_eight_explicit_iceberg_tables() -> None
         assert f"CREATE OR REPLACE TABLE lakehouse.tpch.{table_name}" in ddl
         assert "USING iceberg" in ddl
         assert "NOT NULL" in ddl
+
+
+@pytest.mark.parametrize("scale_factor", [True, 1.0, 0, 100, None])
+def test_tpch_import_rejects_invalid_scale_identity(scale_factor: object) -> None:
+    assert not _is_tpch_manifest(
+        {
+            "scale_factor": scale_factor,
+            "storage": {"profile": "tpch_parquet"},
+            "tables": {name: {} for name in TPCH_TABLE_ORDER},
+        }
+    )
 
 
 def test_manifest_file_resolution_rejects_cross_table_paths(tmp_path: Path) -> None:

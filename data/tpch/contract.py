@@ -32,6 +32,22 @@ SF1_ROW_COUNTS: dict[str, int] = {
     "lineitem": 6_001_215,
 }
 
+# DBGEN cardinalities are exact; lineitem is not a linear multiple of SF1.
+# Independent reference: https://duckdb.org/2025/05/23/arrow-ipc-support-in-duckdb
+SF10_ROW_COUNTS: dict[str, int] = {
+    **{name: count * 10 for name, count in SF1_ROW_COUNTS.items()},
+    "region": 5,
+    "nation": 25,
+    "lineitem": 59_986_052,
+}
+
+
+def row_counts_for_scale(scale_factor: int) -> dict[str, int]:
+    if type(scale_factor) is not int or scale_factor not in (1, 10):
+        raise ValueError("TPC-H scale factor must be 1 or 10")
+    return dict(SF1_ROW_COUNTS if scale_factor == 1 else SF10_ROW_COUNTS)
+
+
 TPCH_SCHEMAS: dict[str, pa.Schema] = {
     "region": pa.schema(
         [

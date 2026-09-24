@@ -42,10 +42,22 @@ from scripts.ensure_tpch_data import (
     PrimaryTpchGateError,
     _locked_python_version,
     _require_primary_gate,
+    ensure_tpch_data,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMIT = "1" * 40
+# Captured with the pre-optimization converter at commit 1d6956c.
+TINY_CONTENT_HASHES = {
+    "region": "20c3843a6eaf5c3ec03530cfe986195626c0b53470c9379254bce3cf354fbf9a",
+    "nation": "b221b2fe7089b010527ff56e12db3daf34ad7a98305bdc73834d206e7e89272d",
+    "supplier": "9c281c4cf6e3ec4b8ae0b3128ccd12f4e32e748e330551ab1f851dc55d12808e",
+    "customer": "9289d154710d7ee918a568cc8cad70643cb1fde74981689984d60f8715c39d98",
+    "part": "24bfe67c5e2f5a87b8dbf8805e4e5151a7d97a9e171c3651feeb283d02dad1d3",
+    "partsupp": "07b2161ca8b0dd48f2c7926f15acf3c0659341b81b9a472660f0fb6ed8e6b09f",
+    "orders": "ea5ee60a97f7d25dbb37daa90419a500c07c3d8bd6728e1f31ced29fdcbca6f0",
+    "lineitem": "6c9b7b454f7aae8b65da2647d9de2598306eefcc3b09f406c2066c1944544ac7",
+}
 SOURCE = {
     "name": "tpch-dbgen",
     "version": f"commit-{COMMIT}",
@@ -88,6 +100,66 @@ def test_locked_tpch_source_and_sf1_contract_are_explicit() -> None:
     assert SF1_ROW_COUNTS["lineitem"] == 6_001_215
 
 
+def test_sf10_contract_has_exact_cardinalities_and_generation_command() -> None:
+    from data.tpch.contract import row_counts_for_scale
+    from data.tpch.source import dbgen_generate_command
+
+    counts = row_counts_for_scale(10)
+    assert counts["lineitem"] == 59_986_052
+    assert counts["orders"] == 15_000_000
+    assert counts["nation"] == 25
+    assert counts["region"] == 5
+    assert dbgen_generate_command(10) == ("./dbgen", "-f", "-s", "10")
+    for invalid in (0, 100, True):
+        with pytest.raises(ValueError, match="1 or 10"):
+            row_counts_for_scale(invalid)
+
+
+def test_sf10_manifest_binds_scale_command_and_exact_counts(tmp_path: Path) -> None:
+    source_dir = tmp_path / "source"
+    counts = _tiny_tbl_source(source_dir)
+    output = tmp_path / "dataset"
+    result = build_dataset_from_tbl(
+        source_dir,
+        output,
+        source_provenance=SOURCE,
+        generator_git_commit=COMMIT,
+        scale_factor=10,
+        expected_counts=counts,
+    )
+    assert result.manifest["scale_factor"] == 10
+    assert result.manifest["scale_profile"] == "sf10"
+    assert "sf10" in result.manifest["dataset_id"]
+    assert validate_tpch_dataset(output, expected_counts=counts).row_counts == counts
+    # An explicit tiny fixture cannot pass full-scale research validation.
+    with pytest.raises(TpchContractError, match="row count"):
+        validate_tpch_dataset(output)
+    result.manifest["generation"]["dbgen_command"][-1] = "1"
+    result.manifest["manifest_sha256"] = _manifest_hash(result.manifest)
+    result.manifest_path.write_text(json.dumps(result.manifest), encoding="utf-8")
+    with pytest.raises(TpchContractError, match="generation metadata"):
+        validate_tpch_dataset(output, expected_counts=counts)
+
+
+def test_sf10_scratch_disk_gate_precedes_materialization(tmp_path: Path) -> None:
+    scratch = tmp_path / "linux-scratch"
+
+    def materializer(*args: object, **kwargs: object) -> None:
+        pytest.fail("DBGEN must not run when scratch has insufficient capacity")
+
+    with pytest.raises(PrimaryTpchGateError, match="scratch directory"):
+        ensure_tpch_data(
+            generate=True,
+            scale_factor=10,
+            output_dir=tmp_path / "sf10",
+            cache_dir=tmp_path / "cache",
+            scratch_dir=scratch,
+            git_probe=lambda root: (COMMIT, False),
+            disk_probe=lambda path: 1 if path == scratch else 100 * 1024**3,
+            table_materializer=materializer,
+        )
+
+
 def test_tiny_tpch_conversion_is_atomic_hash_bound_and_revalidates(tmp_path: Path) -> None:
     source_dir = tmp_path / "source"
     expected_counts = _tiny_tbl_source(source_dir)
@@ -109,6 +181,9 @@ def test_tiny_tpch_conversion_is_atomic_hash_bound_and_revalidates(tmp_path: Pat
     )
 
     assert result.manifest["notice"] == NOTICE
+    assert {
+        table: record["content_sha256"] for table, record in result.manifest["tables"].items()
+    } == TINY_CONTENT_HASHES
     assert result.manifest["benchmark_eligible"] is True
     assert result.manifest["generator"]["version"] == CONVERTER_VERSION
     assert result.manifest["generator"]["python_implementation"] == "CPython"

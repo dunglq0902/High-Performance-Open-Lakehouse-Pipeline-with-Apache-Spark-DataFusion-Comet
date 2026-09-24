@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from data.tpch.contract import TABLE_ORDER
+from data.tpch.contract import TABLE_ORDER, row_counts_for_scale
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _COMMIT_VERSION = re.compile(r"^commit-([0-9a-f]{40})$")
@@ -33,6 +33,12 @@ DBGEN_BUILD_COMMAND = (
 )
 DBGEN_GENERATE_COMMAND = ("./dbgen", "-f", "-s", "1")
 DBGEN_SF1_TIMEOUT_SECONDS = 4 * 60 * 60
+
+
+def dbgen_generate_command(scale_factor: int = 1) -> tuple[str, ...]:
+    row_counts_for_scale(scale_factor)
+    return ("./dbgen", "-f", "-s", str(scale_factor))
+
 
 type Downloader = Callable[[str, Path], None]
 type CommandRunner = Callable[[Sequence[str], Path, Mapping[str, str]], None]
@@ -234,10 +240,13 @@ def materialize_dbgen_tables(
     cache_dir: Path,
     raw_output_dir: Path,
     *,
+    scale_factor: int = 1,
     downloader: Downloader = _download,
     command_runner: CommandRunner = _run_command,
 ) -> None:
-    """Build locked DBGEN and materialize the eight SF1 ``.tbl`` files."""
+    """Build locked DBGEN and materialize the eight scale-specific ``.tbl`` files."""
+
+    generate_command = dbgen_generate_command(scale_factor)
 
     if raw_output_dir.exists():
         raise FileExistsError(f"raw DBGEN output already exists: {raw_output_dir}")
@@ -268,7 +277,7 @@ def materialize_dbgen_tables(
         try:
             _run_materialization_command(
                 command_runner,
-                DBGEN_GENERATE_COMMAND,
+                generate_command,
                 dbgen_dir,
                 environment,
             )

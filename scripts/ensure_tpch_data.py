@@ -1,9 +1,10 @@
-"""Generate or validate the locked, benchmark-eligible TPC-H-derived SF1 dataset."""
+"""Generate or validate a locked TPC-H-derived SF1 or exploratory SF10 dataset."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import platform
 import re
 import shutil
@@ -12,8 +13,9 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
+from data.tpch.contract import row_counts_for_scale
 from data.tpch.dataset import build_dataset_from_tbl, validate_tpch_dataset
-from data.tpch.source import SourceLock, load_source_lock, materialize_dbgen_tables
+from data.tpch.source import load_source_lock, materialize_dbgen_tables
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_LOCK_PATH = ROOT / "runtime-versions.lock"
@@ -25,11 +27,11 @@ _PYTHON_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
 type GitProbe = Callable[[Path], tuple[str, bool]]
 type DiskProbe = Callable[[Path], int]
-type TableMaterializer = Callable[[SourceLock, Path, Path], None]
+type TableMaterializer = Callable[..., None]
 
 
 class PrimaryTpchGateError(RuntimeError):
-    """A fail-closed primary SF1 generation gate did not pass."""
+    """A fail-closed TPC-H generation gate did not pass."""
 
 
 def _locked_python_version(path: Path = RUNTIME_LOCK_PATH) -> str:
@@ -114,7 +116,7 @@ def _require_primary_gate(
         raise PrimaryTpchGateError("free disk observation is unavailable or invalid")
     if free_bytes < minimum_free_bytes:
         raise PrimaryTpchGateError(
-            f"insufficient free disk for TPC-H SF1: {free_bytes} < {minimum_free_bytes}"
+            f"insufficient free disk for TPC-H: {free_bytes} < {minimum_free_bytes}"
         )
     return commit
 
@@ -122,21 +124,31 @@ def _require_primary_gate(
 def ensure_tpch_data(
     *,
     generate: bool,
+    scale_factor: int = 1,
     root: Path = ROOT,
     output_dir: Path = DATASET_PATH,
     cache_dir: Path = CACHE_PATH,
+    scratch_dir: Path | None = None,
     runtime_lock_path: Path = RUNTIME_LOCK_PATH,
     minimum_free_bytes: int = MINIMUM_FREE_BYTES,
     git_probe: GitProbe = _git_probe,
     disk_probe: DiskProbe = _disk_probe,
     table_materializer: TableMaterializer = materialize_dbgen_tables,
 ) -> dict[str, object]:
-    """Validate existing SF1 data or generate it after every primary gate passes."""
+    """Validate scale-bound data or generate it after provenance and disk gates pass."""
 
+    row_counts_for_scale(scale_factor)
+    if scale_factor == 10:
+        minimum_free_bytes = max(minimum_free_bytes, 60 * 1024**3)
+        if output_dir == DATASET_PATH:
+            output_dir = ROOT / "data/generated/tpch-derived-sf10-v1"
     source_lock = load_source_lock(runtime_lock_path)
     source_provenance = source_lock.as_manifest()
     locked_python = _locked_python_version(runtime_lock_path)
     if output_dir.exists():
+        existing = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+        if existing.get("scale_factor") != scale_factor:
+            raise PrimaryTpchGateError("existing dataset scale factor differs from requested scale")
         validate_tpch_dataset(
             output_dir,
             expected_source=source_provenance,
@@ -150,11 +162,11 @@ def ensure_tpch_data(
             "manifest": str(output_dir / "manifest.json"),
             "state": "validated",
             "benchmark_eligible": True,
-            "scale_factor": 1,
+            "scale_factor": scale_factor,
         }
     if not generate:
         raise PrimaryTpchGateError(
-            "TPC-H SF1 data is absent; rerun with --generate after reviewing "
+            f"TPC-H SF{scale_factor} data is absent; rerun with --generate after reviewing "
             "license, disk, and time"
         )
 
@@ -174,9 +186,19 @@ def ensure_tpch_data(
     )
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="tpch-sf1-raw-", dir=output_dir.parent) as temporary:
+    raw_parent = output_dir.parent if scratch_dir is None else scratch_dir
+    if scratch_dir is not None and disk_probe(raw_parent) < minimum_free_bytes:
+        raise PrimaryTpchGateError("insufficient free disk for TPC-H scratch directory")
+    raw_parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix=f"tpch-sf{scale_factor}-raw-", dir=raw_parent
+    ) as temporary:
         raw_dir = Path(temporary) / "raw"
-        table_materializer(source_lock, cache_dir, raw_dir)
+        logging.info("Generating pinned DBGEN SF%s in %s", scale_factor, raw_dir)
+        if scale_factor == 1:
+            table_materializer(source_lock, cache_dir, raw_dir)
+        else:
+            table_materializer(source_lock, cache_dir, raw_dir, scale_factor=scale_factor)
         result = build_dataset_from_tbl(
             raw_dir,
             output_dir,
@@ -185,6 +207,7 @@ def ensure_tpch_data(
             generator_python_version=active_python,
             generator_python_implementation="CPython",
             benchmark_eligible=True,
+            scale_factor=scale_factor,
         )
     validate_tpch_dataset(
         result.dataset_dir,
@@ -197,20 +220,25 @@ def ensure_tpch_data(
         "manifest": str(result.manifest_path),
         "state": "generated",
         "benchmark_eligible": True,
-        "scale_factor": 1,
+        "scale_factor": scale_factor,
     }
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     parser = argparse.ArgumentParser()
     parser.add_argument("--generate", action="store_true")
+    parser.add_argument("--scale-factor", type=int, choices=(1, 10), default=1)
     parser.add_argument("--output", type=Path, default=DATASET_PATH)
     parser.add_argument("--cache", type=Path, default=CACHE_PATH)
+    parser.add_argument("--scratch", type=Path)
     args = parser.parse_args()
     result = ensure_tpch_data(
         generate=args.generate,
+        scale_factor=args.scale_factor,
         output_dir=args.output.resolve(),
         cache_dir=args.cache.resolve(),
+        scratch_dir=args.scratch.resolve() if args.scratch else None,
     )
     print(json.dumps(result, sort_keys=True))
 
